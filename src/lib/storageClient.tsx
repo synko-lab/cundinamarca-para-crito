@@ -1,7 +1,7 @@
 "use client";
 
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { getAuth } from "firebase/auth";
+import { app } from "./firebase";
 
 export type UploadResult = {
   downloadURL: string;
@@ -14,38 +14,55 @@ export async function uploadImageClient(file: File, iglesiaId: string, onProgres
   if (!file.type.startsWith("image/")) throw new Error("El archivo no es una imagen.");
   if (file.size > maxBytes) throw new Error("El archivo supera el tamaño máximo permitido.");
 
-  const imageId = (crypto && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-  const storagePath = `iglesias/${iglesiaId}/imagenes/${imageId}.${ext}`;
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+  if (!cloudName || !uploadPreset) {
+    throw new Error("Cloudinary no está configurado (faltan NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME / NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET).");
+  }
 
-  const storage = getStorage();
-  const storageRef = ref(storage, storagePath);
+  const imageId = (crypto && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+  const publicId = `iglesias/${iglesiaId}/imagenes/${imageId}`;
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", uploadPreset);
+  formData.append("public_id", publicId);
 
   return new Promise<UploadResult>((resolve, reject) => {
-    const uploadTask = uploadBytesResumable(storageRef, file as any);
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        if (onProgress && snapshot.totalBytes) {
-          const percent = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-          onProgress(percent);
-        }
-      },
-      (error) => reject(error),
-      async () => {
-        try {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          resolve({ downloadURL, storagePath, imageId, nombre: file.name });
-        } catch (err) {
-          reject(err);
-        }
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`);
+
+    xhr.upload.onprogress = (event) => {
+      if (onProgress && event.lengthComputable) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
       }
-    );
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          resolve({
+            downloadURL: data.secure_url,
+            storagePath: data.public_id,
+            imageId,
+            nombre: file.name,
+          });
+        } catch {
+          reject(new Error("Respuesta inválida de Cloudinary."));
+        }
+      } else {
+        reject(new Error(`Error subiendo la imagen (${xhr.status}).`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Error de red subiendo la imagen."));
+    xhr.send(formData);
   });
 }
 
 export async function getIdToken(): Promise<string | null> {
-  const auth = getAuth();
+  const auth = getAuth(app);
   const user = auth.currentUser;
   if (!user) return null;
   return user.getIdToken();

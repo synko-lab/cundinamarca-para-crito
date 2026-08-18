@@ -1,7 +1,9 @@
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { requireAdminSession } from "@/lib/admin-session";
+import { normalizeHorarios, cleanHorariosForSave } from "@/lib/horarios";
 
 export async function GET() {
   try {
@@ -13,13 +15,12 @@ export async function GET() {
         id: d.id,
         nombre: data.nombre ?? null,
         pastor: data.pastor ?? null,
+        logoUrl: data.logoUrl ?? null,
         telefono: data.telefono ?? null,
         email: data.email ?? null,
         municipio: data.municipio ?? null,
         direccion: data.direccion ?? null,
         barrio: data.barrio ?? null,
-        denominacion: data.denominacion ?? null,
-        horarioCulto: data.horarioCulto ?? null,
         descripcion: data.descripcion ?? null,
         habitantesMunicipio: data.habitantesMunicipio ?? null,
         distanciaBosaCentroKm: data.distanciaBosaCentroKm ?? null,
@@ -35,7 +36,10 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const unauthorized = await requireAdminSession(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const body = await request.json();
     const {
@@ -46,8 +50,6 @@ export async function POST(request: Request) {
       municipio,
       direccion,
       barrio,
-      denominacion,
-      horarioCulto,
       descripcion,
     } = body;
 
@@ -98,11 +100,10 @@ export async function POST(request: Request) {
       municipio: String(municipio).trim(),
       direccion: direccion ? String(direccion).trim() : "",
       barrio: barrio ? String(barrio).trim() : "",
-      denominacion: denominacion ? String(denominacion).trim() : "",
-      horarioCulto: horarioCulto ? String(horarioCulto).trim() : "",
       descripcion: descripcion ? String(descripcion).trim() : "",
       habitantesMunicipio: habitantesMunicipio,
       distanciaBosaCentroKm: distanciaBosaCentroKm,
+      horarios: cleanHorariosForSave(normalizeHorarios(body.horarios)),
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });

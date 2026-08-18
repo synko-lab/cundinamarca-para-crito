@@ -1,0 +1,620 @@
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
+import { MUNICIPIOS } from "../../../lib/municipios";
+import IglesiaHero, { type Imagen } from "../../iglesias/[id]/components/IglesiaHero";
+import GaleriaSection from "../../iglesias/[id]/components/GaleriaSection";
+import {
+  DIAS_SEMANA,
+  emptyHorarios,
+  normalizeHorarios,
+  cleanHorariosForSave,
+  newSlotId,
+  type HorariosSemana,
+} from "../../../src/lib/horarios";
+import { PlusIcon, TrashMiniIcon } from "./form-icons";
+
+type FormState = {
+  nombre: string;
+  pastor: string;
+  telefono: string;
+  email: string;
+  municipio: string;
+  direccion: string;
+  barrio: string;
+  descripcion: string;
+  habitantesMunicipio: number | null;
+  distanciaBosaCentroKm: number | null;
+};
+
+const EMPTY_FORM: FormState = {
+  nombre: "",
+  pastor: "",
+  telefono: "",
+  email: "",
+  municipio: "",
+  direccion: "",
+  barrio: "",
+  descripcion: "",
+  habitantesMunicipio: null,
+  distanciaBosaCentroKm: null,
+};
+
+const STEPS = [
+  { title: "Datos básicos", description: "Información de contacto" },
+  { title: "Ubicación", description: "Dónde se encuentra" },
+  { title: "Detalles", description: "Datos adicionales" },
+  { title: "Revisión", description: "Confirma y envía" },
+];
+
+export default function IglesiaForm({ editId }: { editId?: string }) {
+  const isEdit = Boolean(editId);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [horarios, setHorarios] = useState<HorariosSemana>(emptyHorarios());
+  const [step, setStep] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [loadingRecord, setLoadingRecord] = useState(isEdit);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [stepError, setStepError] = useState<string | null>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
+
+  const [images, setImages] = useState<Imagen[]>([]);
+  const activeId = editId || createdId;
+
+  useEffect(() => {
+    if (!editId) return;
+    setLoadingRecord(true);
+    fetch(`/api/iglesias/${editId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.item) throw new Error(data?.message || "No se pudo cargar la iglesia.");
+        const it = data.item;
+        setForm({
+          nombre: it.nombre ?? "",
+          pastor: it.pastor ?? "",
+          telefono: it.telefono ?? "",
+          email: it.email ?? "",
+          municipio: it.municipio ?? "",
+          direccion: it.direccion ?? "",
+          barrio: it.barrio ?? "",
+          descripcion: it.descripcion ?? "",
+          habitantesMunicipio: it.habitantesMunicipio ?? null,
+          distanciaBosaCentroKm: it.distanciaBosaCentroKm ?? null,
+        });
+        setHorarios(normalizeHorarios(it.horarios));
+      })
+      .catch((err) => setError(err?.message || String(err)))
+      .finally(() => setLoadingRecord(false));
+  }, [editId]);
+
+  function refreshImages(id: string) {
+    fetch(`/api/iglesias/${id}/imagenes`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) setImages(data.items || []);
+      })
+      .catch((err) => console.error(err));
+  }
+
+  useEffect(() => {
+    if (activeId) refreshImages(activeId);
+  }, [activeId]);
+
+  function update<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((s) => ({ ...s, [key]: value }));
+  }
+
+  function addSlot(dia: string) {
+    setHorarios((h) => ({ ...h, [dia]: [...(h[dia] || []), { id: newSlotId(), hora: "", titulo: "", descripcion: "" }] }));
+  }
+
+  function updateSlot(dia: string, id: string, patch: Partial<{ hora: string; titulo: string; descripcion: string }>) {
+    setHorarios((h) => ({ ...h, [dia]: (h[dia] || []).map((s) => (s.id === id ? { ...s, ...patch } : s)) }));
+  }
+
+  function removeSlot(dia: string, id: string) {
+    setHorarios((h) => ({ ...h, [dia]: (h[dia] || []).filter((s) => s.id !== id) }));
+  }
+
+  function validateStep(target: number): string | null {
+    if (target === 0) {
+      if (!form.nombre.trim()) return "Nombre es obligatorio.";
+      if (!form.pastor.trim()) return "Pastor/Líder es obligatorio.";
+      if (!form.telefono.trim()) return "Teléfono es obligatorio.";
+      if (form.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) return "Email inválido.";
+    }
+    if (target === 1) {
+      if (!form.municipio.trim()) return "Municipio es obligatorio.";
+      if (form.habitantesMunicipio !== null && (!Number.isInteger(form.habitantesMunicipio) || form.habitantesMunicipio < 0)) return "Habitantes debe ser entero positivo.";
+      if (form.distanciaBosaCentroKm !== null && (isNaN(form.distanciaBosaCentroKm) || form.distanciaBosaCentroKm < 0)) return "Distancia inválida.";
+    }
+    return null;
+  }
+
+  function validateAll(): string | null {
+    return validateStep(0) || validateStep(1);
+  }
+
+  function goNext() {
+    const v = validateStep(step);
+    if (v) {
+      setStepError(v);
+      return;
+    }
+    setStepError(null);
+    setStep((s) => Math.min(s + 1, STEPS.length - 1));
+  }
+
+  function goBack() {
+    setStepError(null);
+    setStep((s) => Math.max(s - 1, 0));
+  }
+
+  function goToStep(target: number) {
+    if (target <= step) {
+      setStepError(null);
+      setStep(target);
+      return;
+    }
+    for (let i = step; i < target; i++) {
+      const v = validateStep(i);
+      if (v) {
+        setStepError(v);
+        setStep(i);
+        return;
+      }
+    }
+    setStepError(null);
+    setStep(target);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setMessage(null);
+
+    const v = validateAll();
+    if (v) {
+      setStepError(v);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        nombre: form.nombre,
+        pastor: form.pastor,
+        telefono: form.telefono,
+        email: form.email,
+        municipio: form.municipio,
+        direccion: form.direccion,
+        barrio: form.barrio,
+        descripcion: form.descripcion,
+        habitantesMunicipio: form.habitantesMunicipio,
+        distanciaBosaCentroKm: form.distanciaBosaCentroKm,
+        horarios: cleanHorariosForSave(horarios),
+      };
+
+      if (editId) {
+        const res = await fetch(`/api/iglesias/${editId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.message || "Error en servidor");
+        setMessage("Cambios guardados correctamente.");
+      } else {
+        const res = await fetch("/api/iglesias", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.message || "Error en servidor");
+        setCreatedId(data.id);
+        setMessage("Iglesia registrada. Ahora puedes agregar logo, portada y fotos de galería abajo.");
+      }
+    } catch (err: any) {
+      setError(err?.message || "Error de red");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loadingRecord) {
+    return <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400 shadow-sm">Cargando…</div>;
+  }
+
+  return (
+    <>
+      <Stepper steps={STEPS} current={step} onStepClick={goToStep} />
+
+      <form
+        onSubmit={handleSubmit}
+        aria-label={isEdit ? "Formulario de edición de iglesia" : "Formulario de registro de iglesia"}
+        className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
+      >
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-slate-900">{STEPS[step].title}</h2>
+          <p className="text-sm text-slate-500">{STEPS[step].description}</p>
+        </div>
+
+        {step === 0 && (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <Field label="Nombre" required>
+              <Input value={form.nombre} onChange={(v) => update("nombre", v)} placeholder="Nombre de la iglesia" />
+            </Field>
+            <Field label="Pastor / Líder" required>
+              <Input value={form.pastor} onChange={(v) => update("pastor", v)} placeholder="Nombre del pastor o líder" />
+            </Field>
+            <Field label="Teléfono" required>
+              <Input value={form.telefono} onChange={(v) => update("telefono", v)} placeholder="300 000 0000" />
+            </Field>
+            <Field label="Correo">
+              <Input value={form.email} onChange={(v) => update("email", v)} placeholder="correo@ejemplo.com" type="email" />
+            </Field>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className="grid grid-cols-1 gap-5">
+            <Field label="Municipio" required>
+              <select
+                value={form.municipio}
+                onChange={(e) => update("municipio", e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-emerald-600 focus:outline-none focus:ring-4 focus:ring-emerald-600/10"
+              >
+                <option value="">-- Seleccione municipio --</option>
+                {MUNICIPIOS.map((m) => (
+                  <option key={m.nombre} value={m.nombre}>
+                    {m.nombre}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <Field label="Dirección">
+                <Input value={form.direccion} onChange={(v) => update("direccion", v)} placeholder="Calle 00 # 00-00" />
+              </Field>
+              <Field label="Barrio / Vereda">
+                <Input value={form.barrio} onChange={(v) => update("barrio", v)} placeholder="Nombre del barrio o vereda" />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <Field label="Habitantes del municipio">
+                <Input
+                  type="number"
+                  value={form.habitantesMunicipio ?? ""}
+                  onChange={(v) => update("habitantesMunicipio", v === "" ? null : Number(v))}
+                  placeholder={form.habitantesMunicipio === null ? "Dato pendiente" : undefined}
+                />
+              </Field>
+              <Field label="Distancia hasta Bosa Centro (km)">
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={form.distanciaBosaCentroKm ?? ""}
+                  onChange={(v) => update("distanciaBosaCentroKm", v === "" ? null : Number(v))}
+                  placeholder={form.distanciaBosaCentroKm === null ? "Dato pendiente" : undefined}
+                />
+              </Field>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="grid grid-cols-1 gap-5">
+            <div>
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">Horarios de culto</span>
+              <p className="mb-3 text-xs text-slate-400">
+                Agrega uno o más horarios por día. Cada uno puede tener una hora, un título (ej. "Culto General") y una descripción opcional.
+              </p>
+              <div className="space-y-2">
+                {DIAS_SEMANA.map((dia) => (
+                  <DiaHorarioEditor
+                    key={dia}
+                    dia={dia}
+                    slots={horarios[dia] || []}
+                    onAdd={() => addSlot(dia)}
+                    onUpdate={(id, patch) => updateSlot(dia, id, patch)}
+                    onRemove={(id) => removeSlot(dia, id)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <Field label="Descripción">
+              <textarea
+                value={form.descripcion}
+                onChange={(e) => update("descripcion", e.target.value)}
+                rows={4}
+                className="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-emerald-600 focus:outline-none focus:ring-4 focus:ring-emerald-600/10"
+                placeholder="Cuéntanos brevemente sobre la iglesia"
+              />
+            </Field>
+          </div>
+        )}
+
+        {step === 3 && <ReviewSummary form={form} horarios={horarios} />}
+
+        {stepError && <p className="mt-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{stepError}</p>}
+        {error && <p className="mt-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {message && <p className="mt-5 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</p>}
+
+        <div className="mt-8 flex items-center justify-between border-t border-slate-100 pt-6">
+          <button
+            type="button"
+            onClick={goBack}
+            disabled={step === 0}
+            className="rounded-lg px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Atrás
+          </button>
+
+          {step < STEPS.length - 1 ? (
+            <button
+              type="button"
+              onClick={goNext}
+              className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800"
+            >
+              Siguiente
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "Guardando…" : isEdit ? "Guardar cambios" : "Registrar Iglesia"}
+            </button>
+          )}
+        </div>
+      </form>
+
+      {activeId && (
+        <div className="mt-6 space-y-6">
+          <IglesiaHero
+            iglesiaId={activeId}
+            nombre={form.nombre}
+            pastor={form.pastor}
+            municipio={form.municipio}
+            logo={images.filter((i) => i.tipo === "logo").sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0] ?? null}
+            portada={images.filter((i) => i.tipo === "portada").sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0] ?? null}
+            onChanged={() => refreshImages(activeId)}
+          />
+          <GaleriaSection
+            iglesiaId={activeId}
+            images={images.filter((i) => i.tipo === "galeria").sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))}
+            onChanged={() => refreshImages(activeId)}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+function Stepper({
+  steps,
+  current,
+  onStepClick,
+}: {
+  steps: { title: string; description: string }[];
+  current: number;
+  onStepClick: (index: number) => void;
+}) {
+  return (
+    <ol className="flex items-center justify-between">
+      {steps.map((s, i) => {
+        const isDone = i < current;
+        const isActive = i === current;
+        return (
+          <li key={s.title} className="flex flex-1 items-center last:flex-none">
+            <button
+              type="button"
+              onClick={() => onStepClick(i)}
+              className="flex flex-col items-center gap-1.5 focus:outline-none"
+            >
+              <span
+                className={[
+                  "flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold transition",
+                  isDone
+                    ? "bg-emerald-700 text-white"
+                    : isActive
+                    ? "border-2 border-emerald-700 text-emerald-700"
+                    : "border-2 border-slate-200 text-slate-400",
+                ].join(" ")}
+              >
+                {isDone ? "✓" : i + 1}
+              </span>
+              <span
+                className={[
+                  "hidden text-xs font-medium sm:block",
+                  isActive || isDone ? "text-slate-900" : "text-slate-400",
+                ].join(" ")}
+              >
+                {s.title}
+              </span>
+            </button>
+            {i < steps.length - 1 && (
+              <span
+                className={["mx-2 h-0.5 flex-1 rounded transition sm:mx-3", isDone ? "bg-emerald-700" : "bg-slate-200"].join(" ")}
+              />
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-medium text-slate-700">
+        {label} {required && <span className="text-emerald-700">*</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function Input({
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  step,
+}: {
+  value: string | number;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  step?: string;
+}) {
+  return (
+    <input
+      type={type}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition placeholder:text-slate-400 focus:border-emerald-600 focus:outline-none focus:ring-4 focus:ring-emerald-600/10"
+    />
+  );
+}
+
+function ReviewSummary({ form, horarios }: { form: FormState; horarios: HorariosSemana }) {
+  const rows = useMemo(
+    () => [
+      { label: "Nombre", value: form.nombre },
+      { label: "Pastor / Líder", value: form.pastor },
+      { label: "Teléfono", value: form.telefono },
+      { label: "Correo", value: form.email || "—" },
+      { label: "Municipio", value: form.municipio },
+      { label: "Dirección", value: form.direccion || "—" },
+      { label: "Barrio / Vereda", value: form.barrio || "—" },
+      { label: "Habitantes del municipio", value: form.habitantesMunicipio ?? "Dato pendiente" },
+      { label: "Distancia a Bosa Centro (km)", value: form.distanciaBosaCentroKm ?? "Dato pendiente" },
+    ],
+    [form]
+  );
+
+  const diasConHorario = DIAS_SEMANA.filter((d) => (horarios[d] || []).length > 0);
+
+  return (
+    <div className="space-y-4">
+      <dl className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-center justify-between gap-4 px-4 py-2.5 text-sm">
+            <dt className="text-slate-500">{r.label}</dt>
+            <dd className="text-right font-medium text-slate-900">{String(r.value)}</dd>
+          </div>
+        ))}
+        {form.descripcion && (
+          <div className="px-4 py-2.5 text-sm">
+            <dt className="mb-1 text-slate-500">Descripción</dt>
+            <dd className="text-slate-900">{form.descripcion}</dd>
+          </div>
+        )}
+      </dl>
+
+      <div className="rounded-lg border border-slate-200 px-4 py-3">
+        <div className="mb-2 text-sm font-medium text-slate-700">Horarios de culto</div>
+        {diasConHorario.length === 0 ? (
+          <p className="text-sm text-slate-400">Sin horarios agregados.</p>
+        ) : (
+          <div className="space-y-2">
+            {diasConHorario.map((dia) => (
+              <div key={dia} className="text-sm">
+                <span className="font-semibold text-slate-900">{dia}: </span>
+                <span className="text-slate-600">
+                  {(horarios[dia] || [])
+                    .map((s) => [s.hora, s.titulo].filter(Boolean).join(" · "))
+                    .filter(Boolean)
+                    .join(" — ")}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DiaHorarioEditor({
+  dia,
+  slots,
+  onAdd,
+  onUpdate,
+  onRemove,
+}: {
+  dia: string;
+  slots: { id: string; hora: string; titulo: string; descripcion: string }[];
+  onAdd: () => void;
+  onUpdate: (id: string, patch: Partial<{ hora: string; titulo: string; descripcion: string }>) => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 p-3.5">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold text-slate-900">{dia}</span>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
+        >
+          <PlusIcon />
+          Agregar horario
+        </button>
+      </div>
+
+      {slots.length > 0 && (
+        <div className="mt-3 space-y-2.5">
+          {slots.map((slot) => (
+            <div key={slot.id} className="grid grid-cols-1 gap-2 rounded-lg bg-slate-50 p-2.5 sm:grid-cols-[100px_1fr_1fr_auto]">
+              <input
+                value={slot.hora}
+                onChange={(e) => onUpdate(slot.id, { hora: e.target.value })}
+                placeholder="10:00 a.m."
+                className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm transition focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/10"
+              />
+              <input
+                value={slot.titulo}
+                onChange={(e) => onUpdate(slot.id, { titulo: e.target.value })}
+                placeholder="Título (ej. Culto General)"
+                className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm transition focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/10"
+              />
+              <input
+                value={slot.descripcion}
+                onChange={(e) => onUpdate(slot.id, { descripcion: e.target.value })}
+                placeholder="Descripción (opcional)"
+                className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm transition focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/10"
+              />
+              <button
+                type="button"
+                onClick={() => onRemove(slot.id)}
+                className="flex items-center justify-center rounded-lg px-2 py-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                title="Eliminar horario"
+              >
+                <TrashMiniIcon />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

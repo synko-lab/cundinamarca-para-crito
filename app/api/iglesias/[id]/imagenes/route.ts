@@ -1,24 +1,11 @@
-import { NextResponse } from "next/server";
-import { adminDb, adminAuth } from "@/lib/firebase-admin";
+import { NextRequest, NextResponse } from "next/server";
+import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { requireAdminSession } from "@/lib/admin-session";
 
-async function verifyToken(request: Request) {
-  const auth = request.headers.get("authorization") || request.headers.get("Authorization");
-  if (!auth) return null;
-  const parts = auth.split(" ");
-  if (parts.length !== 2) return null;
-  const token = parts[1];
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const decoded = await adminAuth.verifyIdToken(token);
-    return decoded;
-  } catch (err) {
-    return null;
-  }
-}
-
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
-  try {
-    const { id } = params;
+    const { id } = await params;
     const snapshot = await adminDb.collection("iglesias").doc(id).collection("imagenes").orderBy("createdAt", "desc").get();
 
     const items = snapshot.docs.map((d) => {
@@ -40,22 +27,12 @@ export async function GET(_request: Request, { params }: { params: { id: string 
   }
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const { id } = params;
-    const decoded = await verifyToken(request);
-    if (!decoded) return NextResponse.json({ success: false, message: "No autorizado." }, { status: 401 });
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const unauthorized = await requireAdminSession(request);
+  if (unauthorized) return unauthorized;
 
-    // Ensure user belongs to this iglesia
-    const uid = decoded.uid as string;
-    const userDoc = await adminDb.collection("users").doc(uid).get();
-    if (!userDoc.exists) {
-      return NextResponse.json({ success: false, message: "Usuario no asociado a ninguna iglesia." }, { status: 403 });
-    }
-    const userData: any = userDoc.data();
-    if (!userData.iglesiaId || String(userData.iglesiaId) !== id) {
-      return NextResponse.json({ success: false, message: "No tiene permisos para esta iglesia." }, { status: 403 });
-    }
+  try {
+    const { id } = await params;
 
     const body = await request.json();
     const { imageId, url, storagePath, tipo, nombre } = body;
@@ -64,14 +41,24 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     const docId = imageId || adminDb.collection("__temp").doc().id;
+    const resolvedTipo = tipo ? String(tipo) : "galeria";
 
     await adminDb.collection("iglesias").doc(id).collection("imagenes").doc(docId).set({
       url: String(url),
       storagePath: String(storagePath),
-      tipo: tipo ? String(tipo) : "galeria",
+      tipo: resolvedTipo,
       nombre: String(nombre),
       createdAt: FieldValue.serverTimestamp(),
     });
+
+    // Denormalize the logo onto the iglesia doc so the directory listing
+    // can render it without an extra subcollection read per card.
+    if (resolvedTipo === "logo") {
+      await adminDb.collection("iglesias").doc(id).update({
+        logoUrl: String(url),
+        logoPath: String(storagePath),
+      });
+    }
 
     return NextResponse.json({ success: true, id: docId }, { status: 201 });
   } catch (error) {

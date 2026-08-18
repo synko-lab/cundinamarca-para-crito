@@ -1,46 +1,52 @@
 import Link from "next/link";
 import { adminDb } from "@/lib/firebase-admin";
-import ImagenesManager from "./components/ImagenesManager";
+import { normalizeHorarios } from "@/lib/horarios";
+import IglesiaProfile from "./components/IglesiaProfile";
 
-function fmtDate(ms: number | null) {
-  if (!ms) return "-";
-  return new Date(ms).toLocaleString();
-}
-
-export default async function Page({ params }: { params: { id: string } }) {
-  const { id } = params;
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const doc = await adminDb.collection("iglesias").doc(id).get();
-  if (!doc.exists) return (
-    <div style={{ padding: 24 }}>
-      <p>Iglesia no encontrada.</p>
-      <Link href="/iglesias">Volver al directorio</Link>
-    </div>
-  );
+  if (!doc.exists) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 px-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <p className="font-medium text-slate-700">Iglesia no encontrada.</p>
+          <Link href="/iglesias" className="mt-3 inline-block text-sm font-medium text-emerald-700 hover:underline">
+            ← Volver al directorio
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const data: any = doc.data();
-  const createdAt = data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : data.createdAt ?? null;
-  const updatedAt = data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt ?? null;
+  const initialData = {
+    nombre: data.nombre ?? "",
+    pastor: data.pastor ?? "",
+    telefono: data.telefono ?? "",
+    email: data.email ?? "",
+    municipio: data.municipio ?? "",
+    direccion: data.direccion ?? "",
+    barrio: data.barrio ?? "",
+    horarios: normalizeHorarios(data.horarios),
+    descripcion: data.descripcion ?? "",
+    habitantesMunicipio: data.habitantesMunicipio ?? null,
+    distanciaBosaCentroKm: data.distanciaBosaCentroKm ?? null,
+    createdAt: data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : data.createdAt ?? null,
+    updatedAt: data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt ?? null,
+  };
 
   return (
-    <div style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
-      <Link href="/iglesias">← Volver al directorio</Link>
-      <h1 style={{ marginTop: 12 }}>{data.nombre ?? "(sin nombre)"}</h1>
-      <p style={{ color: "#6b7280" }}>{data.pastor ? `Pastor: ${data.pastor}` : ""}</p>
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 px-4 py-10 sm:py-16">
+      <div className="mx-auto w-full max-w-3xl">
+        <Link href="/iglesias" className="text-sm font-medium text-emerald-700 hover:underline">
+          ← Volver al directorio
+        </Link>
 
-      <section style={{ marginTop: 18, display: "grid", gap: 8 }}>
-        <div><strong>Teléfono:</strong> {data.telefono ?? "-"}</div>
-        <div><strong>Correo:</strong> {data.email ?? "-"}</div>
-        <div><strong>Municipio:</strong> {data.municipio ?? "-"}</div>
-        <div><strong>Dirección:</strong> {data.direccion ?? "-"}</div>
-        <div><strong>Barrio:</strong> {data.barrio ?? "-"}</div>
-        <div><strong>Denominación:</strong> {data.denominacion ?? "-"}</div>
-        <div><strong>Horario de culto:</strong> {data.horarioCulto ?? "-"}</div>
-        <div><strong>Habitantes municipio:</strong> {data.habitantesMunicipio ?? "Dato pendiente"}</div>
-        <div><strong>Distancia a Bosa Centro (km):</strong> {data.distanciaBosaCentroKm ?? "Dato pendiente"}</div>
-        <div><strong>Descripción:</strong> <div style={{ marginTop:6 }}>{data.descripcion ?? "-"}</div></div>
-        <div style={{ color: "#9ca3af" }}><small>Creado: {fmtDate(createdAt)} • Actualizado: {fmtDate(updatedAt)}</small></div>
-      </section>
-      <ImagenesManager iglesiaId={id} />
+        <div className="mt-4">
+          <IglesiaProfile id={id} initialData={initialData} />
+        </div>
+      </div>
     </div>
   );
 }

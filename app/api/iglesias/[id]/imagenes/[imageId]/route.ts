@@ -1,46 +1,27 @@
-import { NextResponse } from "next/server";
-import { adminDb, adminAuth, adminStorage } from "@/lib/firebase-admin";
+import { NextRequest, NextResponse } from "next/server";
+import { adminDb } from "@/lib/firebase-admin";
+import { deleteCloudinaryImage } from "@/lib/cloudinary-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { requireAdminSession } from "@/lib/admin-session";
 
-async function verifyToken(request: Request) {
-  const auth = request.headers.get("authorization") || request.headers.get("Authorization");
-  if (!auth) return null;
-  const parts = auth.split(" ");
-  if (parts.length !== 2) return null;
-  const token = parts[1];
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string; imageId: string }> }) {
+  const unauthorized = await requireAdminSession(request);
+  if (unauthorized) return unauthorized;
+
+  const { id, imageId } = await params;
   try {
-    const decoded = await adminAuth.verifyIdToken(token);
-    return decoded;
-  } catch (err) {
-    return null;
-  }
-}
-
-export async function DELETE(_request: Request, { params }: { params: { id: string; imageId: string } }) {
-  const { id, imageId } = params;
-  try {
-    const decoded = await verifyToken(_request);
-    if (!decoded) return NextResponse.json({ success: false, message: "No autorizado." }, { status: 401 });
-
-    const uid = decoded.uid as string;
-    const userDoc = await adminDb.collection("users").doc(uid).get();
-    if (!userDoc.exists || String(userDoc.data()?.iglesiaId) !== id) {
-      return NextResponse.json({ success: false, message: "No tiene permisos." }, { status: 403 });
-    }
-
     const docRef = adminDb.collection("iglesias").doc(id).collection("imagenes").doc(imageId);
     const doc = await docRef.get();
     if (!doc.exists) return NextResponse.json({ success: false, message: "No encontrado." }, { status: 404 });
     const data: any = doc.data();
     const storagePath = data.storagePath;
 
-    // Attempt to delete storage file first
+    // Attempt to delete the file in Cloudinary first
     try {
-      const bucket = adminStorage.bucket(process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
-      await bucket.file(String(storagePath)).delete({ ignoreNotFound: true });
+      await deleteCloudinaryImage(String(storagePath));
     } catch (err) {
-      console.error("Error deleting storage file:", err);
-      return NextResponse.json({ success: false, message: "No se pudo eliminar archivo en Storage." }, { status: 500 });
+      console.error("Error deleting Cloudinary image:", err);
+      return NextResponse.json({ success: false, message: "No se pudo eliminar la imagen en Cloudinary." }, { status: 500 });
     }
 
     try {
@@ -50,6 +31,15 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
       return NextResponse.json({ success: false, message: "Error eliminando registro en Firestore." }, { status: 500 });
     }
 
+    // Clear the denormalized logo on the iglesia doc if this was the active one
+    if (data.tipo === "logo") {
+      const iglesiaRef = adminDb.collection("iglesias").doc(id);
+      const iglesiaDoc = await iglesiaRef.get();
+      if (iglesiaDoc.data()?.logoPath === storagePath) {
+        await iglesiaRef.update({ logoUrl: FieldValue.delete(), logoPath: FieldValue.delete() });
+      }
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting imagen:", error);
@@ -57,19 +47,13 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: { id: string; imageId: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string; imageId: string }> }) {
+  const unauthorized = await requireAdminSession(request);
+  if (unauthorized) return unauthorized;
+
   // Replace image metadata after client uploads new file
-  const { id, imageId } = params;
+  const { id, imageId } = await params;
   try {
-    const decoded = await verifyToken(request);
-    if (!decoded) return NextResponse.json({ success: false, message: "No autorizado." }, { status: 401 });
-
-    const uid = decoded.uid as string;
-    const userDoc = await adminDb.collection("users").doc(uid).get();
-    if (!userDoc.exists || String(userDoc.data()?.iglesiaId) !== id) {
-      return NextResponse.json({ success: false, message: "No tiene permisos." }, { status: 403 });
-    }
-
     const body = await request.json();
     const { url: newUrl, storagePath: newStoragePath, nombre: newNombre, tipo: newTipo } = body;
     if (!newUrl || !newStoragePath) return NextResponse.json({ success: false, message: "Datos incompletos." }, { status: 400 });
@@ -80,25 +64,33 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     const oldData: any = doc.data();
     const oldStorage = oldData.storagePath;
 
+    const resolvedTipo = newTipo ? String(newTipo) : oldData.tipo || "galeria";
+
     // Update document first
     await docRef.update({
       url: String(newUrl),
       storagePath: String(newStoragePath),
       nombre: newNombre ? String(newNombre) : oldData.nombre || "",
-      tipo: newTipo ? String(newTipo) : oldData.tipo || "galeria",
+      tipo: resolvedTipo,
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    if (resolvedTipo === "logo") {
+      await adminDb.collection("iglesias").doc(id).update({
+        logoUrl: String(newUrl),
+        logoPath: String(newStoragePath),
+      });
+    }
+
     // Try to delete old file
     try {
-      const bucket = adminStorage.bucket(process.env.FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
       if (oldStorage && oldStorage !== newStoragePath) {
-        await bucket.file(String(oldStorage)).delete({ ignoreNotFound: true });
+        await deleteCloudinaryImage(String(oldStorage));
       }
     } catch (err) {
-      console.error("Error deleting old storage file:", err);
+      console.error("Error deleting old Cloudinary image:", err);
       // Do not fail operation – return warning
-      return NextResponse.json({ success: true, warning: "No se pudo eliminar archivo antiguo en Storage." });
+      return NextResponse.json({ success: true, warning: "No se pudo eliminar la imagen antigua en Cloudinary." });
     }
 
     return NextResponse.json({ success: true });
