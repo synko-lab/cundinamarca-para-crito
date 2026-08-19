@@ -30,8 +30,6 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     barrio: data.barrio ?? "",
     horarios: normalizeHorarios(data.horarios),
     descripcion: data.descripcion ?? "",
-    habitantesMunicipio: data.habitantesMunicipio ?? null,
-    distanciaBosaCentroKm: data.distanciaBosaCentroKm ?? null,
     createdAt: data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : data.createdAt ?? null,
     updatedAt: data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt ?? null,
   };

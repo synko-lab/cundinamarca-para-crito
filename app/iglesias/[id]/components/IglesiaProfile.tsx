@@ -3,15 +3,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import IglesiaHero, { type Imagen } from "./IglesiaHero";
 import GaleriaSection from "./GaleriaSection";
-import { DIAS_SEMANA, type HorariosSemana } from "../../../../src/lib/horarios";
+import HorariosCultoCard from "./HorariosCultoCard";
+import { type HorariosSemana } from "../../../../src/lib/horarios";
 import {
   PhoneIcon,
   MailIcon,
   MapPinIcon,
   HomeIcon,
-  ClockIcon,
-  UsersIcon,
-  RulerIcon,
   CalendarIcon,
 } from "./icons";
 
@@ -25,8 +23,6 @@ export type IglesiaData = {
   barrio: string;
   horarios: HorariosSemana;
   descripcion: string;
-  habitantesMunicipio: number | null;
-  distanciaBosaCentroKm: number | null;
   createdAt: number | null;
   updatedAt: number | null;
 };
@@ -67,11 +63,7 @@ export default function IglesiaProfile({ id, initialData }: { id: string; initia
     [MapPinIcon, "Municipio", initialData.municipio || "-"],
     [HomeIcon, "Dirección", initialData.direccion || "-"],
     [HomeIcon, "Barrio", initialData.barrio || "-"],
-    [UsersIcon, "Habitantes municipio", initialData.habitantesMunicipio ?? "Dato pendiente"],
-    [RulerIcon, "Distancia a Bosa Centro (km)", initialData.distanciaBosaCentroKm ?? "Dato pendiente"],
   ];
-
-  const diasConHorario = DIAS_SEMANA.filter((d) => (initialData.horarios[d] || []).length > 0);
 
   return (
     <div className="space-y-6">
@@ -111,34 +103,7 @@ export default function IglesiaProfile({ id, initialData }: { id: string; initia
         </p>
       </div>
 
-      {diasConHorario.length > 0 && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <div className="mb-4 flex items-center gap-2">
-            <ClockIcon className="h-5 w-5 text-emerald-700" />
-            <h2 className="text-lg font-semibold text-slate-900">Horarios de Culto</h2>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {diasConHorario.map((dia) => (
-              <div key={dia} className="grid grid-cols-1 gap-2 py-3 first:pt-0 last:pb-0 sm:grid-cols-[120px_1fr] sm:gap-4">
-                <div className="text-sm font-semibold text-slate-900">{dia}</div>
-                <div className="space-y-2">
-                  {(initialData.horarios[dia] || []).map((slot) => (
-                    <div key={slot.id} className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 rounded-lg bg-slate-50 px-3 py-2">
-                      {slot.hora && (
-                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-                          {slot.hora}
-                        </span>
-                      )}
-                      {slot.titulo && <span className="text-sm font-medium text-slate-900">{slot.titulo}</span>}
-                      {slot.descripcion && <span className="text-xs text-slate-500">{slot.descripcion}</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <HorariosCultoCard horarios={initialData.horarios} />
 
       <GaleriaSection iglesiaId={id} images={galeria} readOnly />
     </div>

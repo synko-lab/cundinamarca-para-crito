@@ -2,8 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { MUNICIPIOS } from "../../../lib/municipios";
-import IglesiaHero, { type Imagen } from "../../iglesias/[id]/components/IglesiaHero";
-import GaleriaSection from "../../iglesias/[id]/components/GaleriaSection";
+import { type Imagen } from "../../iglesias/[id]/components/IglesiaHero";
+import { uploadImageClient } from "../../../src/lib/storageClient";
 import {
   DIAS_SEMANA,
   emptyHorarios,
@@ -23,8 +23,6 @@ type FormState = {
   direccion: string;
   barrio: string;
   descripcion: string;
-  habitantesMunicipio: number | null;
-  distanciaBosaCentroKm: number | null;
 };
 
 const EMPTY_FORM: FormState = {
@@ -36,8 +34,6 @@ const EMPTY_FORM: FormState = {
   direccion: "",
   barrio: "",
   descripcion: "",
-  habitantesMunicipio: null,
-  distanciaBosaCentroKm: null,
 };
 
 const STEPS = [
@@ -45,14 +41,16 @@ const STEPS = [
   { title: "Ubicación", description: "Dónde se encuentra" },
   { title: "Detalles", description: "Datos adicionales" },
   { title: "Revisión", description: "Confirma y envía" },
+  { title: "Imágenes", description: "Logo, portada y galería" },
 ];
+const REVIEW_STEP = 3;
+const IMAGES_STEP = 4;
 
 export default function IglesiaForm({ editId }: { editId?: string }) {
   const isEdit = Boolean(editId);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [horarios, setHorarios] = useState<HorariosSemana>(emptyHorarios());
   const [step, setStep] = useState(0);
-  const [loading, setLoading] = useState(false);
   const [loadingRecord, setLoadingRecord] = useState(isEdit);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +59,52 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
 
   const [images, setImages] = useState<Imagen[]>([]);
   const activeId = editId || createdId;
+
+  // Imágenes "en espera": no se suben hasta pulsar Guardar en la pestaña final.
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [portadaFile, setPortadaFile] = useState<File | null>(null);
+  const [portadaPreview, setPortadaPreview] = useState<string | null>(null);
+  const [galeriaStaged, setGaleriaStaged] = useState<{ file: File; preview: string }[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  function stageLogo(file: File | null) {
+    if (logoPreview) URL.revokeObjectURL(logoPreview);
+    setLogoFile(file);
+    setLogoPreview(file ? URL.createObjectURL(file) : null);
+  }
+
+  function stagePortada(file: File | null) {
+    if (portadaPreview) URL.revokeObjectURL(portadaPreview);
+    setPortadaFile(file);
+    setPortadaPreview(file ? URL.createObjectURL(file) : null);
+  }
+
+  function stageGaleriaFiles(files: FileList | null) {
+    if (!files) return;
+    const nuevos = Array.from(files).map((file) => ({ file, preview: URL.createObjectURL(file) }));
+    setGaleriaStaged((prev) => [...prev, ...nuevos]);
+  }
+
+  function unstageGaleriaFile(index: number) {
+    setGaleriaStaged((prev) => {
+      URL.revokeObjectURL(prev[index].preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  async function handleDeleteExisting(imageId: string) {
+    if (!activeId) return;
+    if (!confirm("¿Eliminar esta imagen?")) return;
+    try {
+      const res = await fetch(`/api/iglesias/${activeId}/imagenes/${imageId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || "No se pudo eliminar.");
+      refreshImages(activeId);
+    } catch (err: any) {
+      setError(err?.message || String(err));
+    }
+  }
 
   useEffect(() => {
     if (!editId) return;
@@ -79,8 +123,6 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
           direccion: it.direccion ?? "",
           barrio: it.barrio ?? "",
           descripcion: it.descripcion ?? "",
-          habitantesMunicipio: it.habitantesMunicipio ?? null,
-          distanciaBosaCentroKm: it.distanciaBosaCentroKm ?? null,
         });
         setHorarios(normalizeHorarios(it.horarios));
       })
@@ -106,10 +148,10 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
   }
 
   function addSlot(dia: string) {
-    setHorarios((h) => ({ ...h, [dia]: [...(h[dia] || []), { id: newSlotId(), hora: "", titulo: "", descripcion: "" }] }));
+    setHorarios((h) => ({ ...h, [dia]: [...(h[dia] || []), { id: newSlotId(), titulo: "", horaInicio: "", horaFin: "" }] }));
   }
 
-  function updateSlot(dia: string, id: string, patch: Partial<{ hora: string; titulo: string; descripcion: string }>) {
+  function updateSlot(dia: string, id: string, patch: Partial<{ titulo: string; horaInicio: string; horaFin: string }>) {
     setHorarios((h) => ({ ...h, [dia]: (h[dia] || []).map((s) => (s.id === id ? { ...s, ...patch } : s)) }));
   }
 
@@ -126,8 +168,6 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
     }
     if (target === 1) {
       if (!form.municipio.trim()) return "Municipio es obligatorio.";
-      if (form.habitantesMunicipio !== null && (!Number.isInteger(form.habitantesMunicipio) || form.habitantesMunicipio < 0)) return "Habitantes debe ser entero positivo.";
-      if (form.distanciaBosaCentroKm !== null && (isNaN(form.distanciaBosaCentroKm) || form.distanciaBosaCentroKm < 0)) return "Distancia inválida.";
     }
     return null;
   }
@@ -169,18 +209,38 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
     setStep(target);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleFormNav(e: React.FormEvent) {
     e.preventDefault();
+    if (step < IMAGES_STEP) goNext();
+  }
+
+  async function uploadStaged(id: string, file: File, tipo: "logo" | "portada" | "galeria") {
+    const result = await uploadImageClient(file, id);
+    await fetch(`/api/iglesias/${id}/imagenes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        imageId: result.imageId,
+        url: result.downloadURL,
+        storagePath: result.storagePath,
+        tipo,
+        nombre: result.nombre,
+      }),
+    });
+  }
+
+  async function handleSaveAll() {
     setError(null);
     setMessage(null);
 
     const v = validateAll();
     if (v) {
       setStepError(v);
+      setStep(validateStep(0) ? 0 : 1);
       return;
     }
 
-    setLoading(true);
+    setSaving(true);
     try {
       const payload = {
         nombre: form.nombre,
@@ -191,20 +251,18 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
         direccion: form.direccion,
         barrio: form.barrio,
         descripcion: form.descripcion,
-        habitantesMunicipio: form.habitantesMunicipio,
-        distanciaBosaCentroKm: form.distanciaBosaCentroKm,
         horarios: cleanHorariosForSave(horarios),
       };
 
-      if (editId) {
-        const res = await fetch(`/api/iglesias/${editId}`, {
+      let id = activeId;
+      if (id) {
+        const res = await fetch(`/api/iglesias/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.message || "Error en servidor");
-        setMessage("Cambios guardados correctamente.");
       } else {
         const res = await fetch("/api/iglesias", {
           method: "POST",
@@ -213,13 +271,31 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.message || "Error en servidor");
-        setCreatedId(data.id);
-        setMessage("Iglesia registrada. Ahora puedes agregar logo, portada y fotos de galería abajo.");
+        id = String(data.id);
+        setCreatedId(id);
       }
+
+      if (!id) throw new Error("No se pudo determinar el ID de la iglesia.");
+
+      if (logoFile) await uploadStaged(id, logoFile, "logo");
+      if (portadaFile) await uploadStaged(id, portadaFile, "portada");
+      for (const item of galeriaStaged) {
+        await uploadStaged(id, item.file, "galeria");
+      }
+
+      stageLogo(null);
+      stagePortada(null);
+      setGaleriaStaged((prev) => {
+        prev.forEach((p) => URL.revokeObjectURL(p.preview));
+        return [];
+      });
+
+      await refreshImages(id);
+      setMessage("Guardado correctamente.");
     } catch (err: any) {
       setError(err?.message || "Error de red");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
@@ -227,12 +303,162 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
     return <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400 shadow-sm">Cargando…</div>;
   }
 
+  if (step === IMAGES_STEP) {
+    const existingLogo = images.filter((i) => i.tipo === "logo").sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0] ?? null;
+    const existingPortada = images.filter((i) => i.tipo === "portada").sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0] ?? null;
+    const existingGaleria = images.filter((i) => i.tipo === "galeria").sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+
+    return (
+      <>
+        <Stepper steps={STEPS} current={step} onStepClick={goToStep} />
+
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-slate-900">{STEPS[step].title}</h2>
+            <p className="text-sm text-slate-500">Selecciona las imágenes; se suben todas al presionar Guardar.</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div>
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">Logo</span>
+              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 transition hover:border-emerald-500 hover:bg-emerald-50/50">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => stageLogo(e.target.files ? e.target.files[0] : null)}
+                />
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                  {logoPreview || existingLogo ? (
+                    <img src={logoPreview || existingLogo!.url} alt="Logo" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-xs text-slate-300">Sin logo</span>
+                  )}
+                </div>
+                <span className="text-sm text-slate-500">
+                  {logoFile ? logoFile.name : existingLogo ? "Haz clic para cambiar" : "Haz clic para elegir"}
+                </span>
+              </label>
+              {logoFile && <p className="mt-1 text-xs text-amber-600">Pendiente de guardar</p>}
+            </div>
+
+            <div>
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">Portada</span>
+              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 transition hover:border-emerald-500 hover:bg-emerald-50/50">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => stagePortada(e.target.files ? e.target.files[0] : null)}
+                />
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                  {portadaPreview || existingPortada ? (
+                    <img src={portadaPreview || existingPortada!.url} alt="Portada" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-xs text-slate-300">Sin portada</span>
+                  )}
+                </div>
+                <span className="text-sm text-slate-500">
+                  {portadaFile ? portadaFile.name : existingPortada ? "Haz clic para cambiar" : "Haz clic para elegir"}
+                </span>
+              </label>
+              {portadaFile && <p className="mt-1 text-xs text-amber-600">Pendiente de guardar</p>}
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-slate-700">Galería</span>
+              <label className="cursor-pointer rounded-lg bg-emerald-700 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-800">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    stageGaleriaFiles(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+                + Agregar fotos
+              </label>
+            </div>
+
+            {existingGaleria.length === 0 && galeriaStaged.length === 0 ? (
+              <div className="mt-3 rounded-lg border border-dashed border-slate-300 px-6 py-8 text-center text-sm text-slate-400">
+                Aún no hay fotos en la galería.
+              </div>
+            ) : (
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {existingGaleria.map((img) => (
+                  <div key={img.id} className="group relative overflow-hidden rounded-lg border border-slate-200">
+                    <div className="flex h-28 w-full items-center justify-center bg-slate-100">
+                      <img src={img.url} alt={img.nombre} className="h-full w-full object-cover" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteExisting(img.id)}
+                      className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition group-hover:opacity-100"
+                      title="Eliminar"
+                    >
+                      <TrashMiniIcon className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {galeriaStaged.map((item, i) => (
+                  <div key={i} className="group relative overflow-hidden rounded-lg border-2 border-dashed border-amber-300">
+                    <div className="flex h-28 w-full items-center justify-center bg-slate-100">
+                      <img src={item.preview} alt="" className="h-full w-full object-cover" />
+                    </div>
+                    <span className="absolute left-1.5 top-1.5 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                      Pendiente
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => unstageGaleriaFile(i)}
+                      className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition group-hover:opacity-100"
+                      title="Quitar"
+                    >
+                      <TrashMiniIcon className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {stepError && <p className="mt-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{stepError}</p>}
+          {error && <p className="mt-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          {message && <p className="mt-5 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</p>}
+
+          <div className="mt-8 flex items-center justify-between border-t border-slate-100 pt-6">
+            <button
+              type="button"
+              onClick={() => setStep(REVIEW_STEP)}
+              className="rounded-lg px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
+            >
+              Atrás
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveAll}
+              disabled={saving}
+              className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? "Guardando…" : isEdit || createdId ? "Guardar cambios" : "Guardar"}
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <Stepper steps={STEPS} current={step} onStepClick={goToStep} />
 
       <form
-        onSubmit={handleSubmit}
+        onSubmit={handleFormNav}
         aria-label={isEdit ? "Formulario de edición de iglesia" : "Formulario de registro de iglesia"}
         className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
       >
@@ -283,35 +509,15 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
                 <Input value={form.barrio} onChange={(v) => update("barrio", v)} placeholder="Nombre del barrio o vereda" />
               </Field>
             </div>
-
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <Field label="Habitantes del municipio">
-                <Input
-                  type="number"
-                  value={form.habitantesMunicipio ?? ""}
-                  onChange={(v) => update("habitantesMunicipio", v === "" ? null : Number(v))}
-                  placeholder={form.habitantesMunicipio === null ? "Dato pendiente" : undefined}
-                />
-              </Field>
-              <Field label="Distancia hasta Bosa Centro (km)">
-                <Input
-                  type="number"
-                  step="0.1"
-                  value={form.distanciaBosaCentroKm ?? ""}
-                  onChange={(v) => update("distanciaBosaCentroKm", v === "" ? null : Number(v))}
-                  placeholder={form.distanciaBosaCentroKm === null ? "Dato pendiente" : undefined}
-                />
-              </Field>
-            </div>
           </div>
         )}
 
         {step === 2 && (
           <div className="grid grid-cols-1 gap-5">
             <div>
-              <span className="mb-1.5 block text-sm font-medium text-slate-700">Horarios de culto</span>
+              <span className="mb-1.5 block text-sm font-medium text-slate-700">Horarios</span>
               <p className="mb-3 text-xs text-slate-400">
-                Agrega uno o más horarios por día. Cada uno puede tener una hora, un título (ej. "Culto General") y una descripción opcional.
+                Agrega uno o más horarios por día. Cada uno lleva un título (ej. "Culto General"), hora de inicio y hora de cierre.
               </p>
               <div className="space-y-2">
                 {DIAS_SEMANA.map((dia) => (
@@ -355,44 +561,15 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
             Atrás
           </button>
 
-          {step < STEPS.length - 1 ? (
-            <button
-              type="button"
-              onClick={goNext}
-              className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800"
-            >
-              Siguiente
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? "Guardando…" : isEdit ? "Guardar cambios" : "Registrar Iglesia"}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={goNext}
+            className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800"
+          >
+            Siguiente
+          </button>
         </div>
       </form>
-
-      {activeId && (
-        <div className="mt-6 space-y-6">
-          <IglesiaHero
-            iglesiaId={activeId}
-            nombre={form.nombre}
-            pastor={form.pastor}
-            municipio={form.municipio}
-            logo={images.filter((i) => i.tipo === "logo").sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0] ?? null}
-            portada={images.filter((i) => i.tipo === "portada").sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0] ?? null}
-            onChanged={() => refreshImages(activeId)}
-          />
-          <GaleriaSection
-            iglesiaId={activeId}
-            images={images.filter((i) => i.tipo === "galeria").sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))}
-            onChanged={() => refreshImages(activeId)}
-          />
-        </div>
-      )}
     </>
   );
 }
@@ -505,8 +682,6 @@ function ReviewSummary({ form, horarios }: { form: FormState; horarios: Horarios
       { label: "Municipio", value: form.municipio },
       { label: "Dirección", value: form.direccion || "—" },
       { label: "Barrio / Vereda", value: form.barrio || "—" },
-      { label: "Habitantes del municipio", value: form.habitantesMunicipio ?? "Dato pendiente" },
-      { label: "Distancia a Bosa Centro (km)", value: form.distanciaBosaCentroKm ?? "Dato pendiente" },
     ],
     [form]
   );
@@ -531,7 +706,7 @@ function ReviewSummary({ form, horarios }: { form: FormState; horarios: Horarios
       </dl>
 
       <div className="rounded-lg border border-slate-200 px-4 py-3">
-        <div className="mb-2 text-sm font-medium text-slate-700">Horarios de culto</div>
+        <div className="mb-2 text-sm font-medium text-slate-700">Horarios</div>
         {diasConHorario.length === 0 ? (
           <p className="text-sm text-slate-400">Sin horarios agregados.</p>
         ) : (
@@ -541,7 +716,10 @@ function ReviewSummary({ form, horarios }: { form: FormState; horarios: Horarios
                 <span className="font-semibold text-slate-900">{dia}: </span>
                 <span className="text-slate-600">
                   {(horarios[dia] || [])
-                    .map((s) => [s.hora, s.titulo].filter(Boolean).join(" · "))
+                    .map((s) => {
+                      const rango = [s.horaInicio, s.horaFin].filter(Boolean).join(" – ");
+                      return [s.titulo, rango].filter(Boolean).join(" · ");
+                    })
                     .filter(Boolean)
                     .join(" — ")}
                 </span>
@@ -562,9 +740,9 @@ function DiaHorarioEditor({
   onRemove,
 }: {
   dia: string;
-  slots: { id: string; hora: string; titulo: string; descripcion: string }[];
+  slots: { id: string; titulo: string; horaInicio: string; horaFin: string }[];
   onAdd: () => void;
-  onUpdate: (id: string, patch: Partial<{ hora: string; titulo: string; descripcion: string }>) => void;
+  onUpdate: (id: string, patch: Partial<{ titulo: string; horaInicio: string; horaFin: string }>) => void;
   onRemove: (id: string) => void;
 }) {
   return (
@@ -584,13 +762,7 @@ function DiaHorarioEditor({
       {slots.length > 0 && (
         <div className="mt-3 space-y-2.5">
           {slots.map((slot) => (
-            <div key={slot.id} className="grid grid-cols-1 gap-2 rounded-lg bg-slate-50 p-2.5 sm:grid-cols-[100px_1fr_1fr_auto]">
-              <input
-                value={slot.hora}
-                onChange={(e) => onUpdate(slot.id, { hora: e.target.value })}
-                placeholder="10:00 a.m."
-                className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm transition focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/10"
-              />
+            <div key={slot.id} className="grid grid-cols-1 gap-2 rounded-lg bg-slate-50 p-2.5 sm:grid-cols-[1fr_90px_90px_auto]">
               <input
                 value={slot.titulo}
                 onChange={(e) => onUpdate(slot.id, { titulo: e.target.value })}
@@ -598,9 +770,15 @@ function DiaHorarioEditor({
                 className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm transition focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/10"
               />
               <input
-                value={slot.descripcion}
-                onChange={(e) => onUpdate(slot.id, { descripcion: e.target.value })}
-                placeholder="Descripción (opcional)"
+                value={slot.horaInicio}
+                onChange={(e) => onUpdate(slot.id, { horaInicio: e.target.value })}
+                placeholder="10:00 a.m."
+                className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm transition focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/10"
+              />
+              <input
+                value={slot.horaFin}
+                onChange={(e) => onUpdate(slot.id, { horaFin: e.target.value })}
+                placeholder="11:00 a.m."
                 className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm transition focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/10"
               />
               <button

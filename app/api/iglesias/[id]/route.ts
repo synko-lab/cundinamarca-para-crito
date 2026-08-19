@@ -55,32 +55,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       );
     }
 
-    const rawHabitantes = body.habitantesMunicipio;
-    let habitantesMunicipio: number | null = null;
-    if (rawHabitantes !== undefined && rawHabitantes !== null && rawHabitantes !== "") {
-      const n = Number(rawHabitantes);
-      if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
-        return NextResponse.json(
-          { success: false, message: "habitantesMunicipio debe ser un entero válido." },
-          { status: 400 }
-        );
-      }
-      habitantesMunicipio = Math.round(n);
-    }
-
-    const rawDistancia = body.distanciaBosaCentroKm;
-    let distanciaBosaCentroKm: number | null = null;
-    if (rawDistancia !== undefined && rawDistancia !== null && rawDistancia !== "") {
-      const d = Number(rawDistancia);
-      if (!Number.isFinite(d) || d < 0) {
-        return NextResponse.json(
-          { success: false, message: "distanciaBosaCentroKm debe ser un número válido." },
-          { status: 400 }
-        );
-      }
-      distanciaBosaCentroKm = Number(d);
-    }
-
     const update = {
       nombre: String(nombre).trim(),
       pastor: String(pastor).trim(),
@@ -90,8 +64,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       direccion: direccion ? String(direccion).trim() : "",
       barrio: barrio ? String(barrio).trim() : "",
       descripcion: descripcion ? String(descripcion).trim() : "",
-      habitantesMunicipio,
-      distanciaBosaCentroKm,
       horarios: cleanHorariosForSave(normalizeHorarios(body.horarios)),
       updatedAt: FieldValue.serverTimestamp(),
     };

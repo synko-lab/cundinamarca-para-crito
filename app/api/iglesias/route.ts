@@ -22,8 +22,6 @@ export async function GET() {
         direccion: data.direccion ?? null,
         barrio: data.barrio ?? null,
         descripcion: data.descripcion ?? null,
-        habitantesMunicipio: data.habitantesMunicipio ?? null,
-        distanciaBosaCentroKm: data.distanciaBosaCentroKm ?? null,
         createdAt: data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : data.createdAt ?? null,
         updatedAt: data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt ?? null,
       };
@@ -53,10 +51,6 @@ export async function POST(request: NextRequest) {
       descripcion,
     } = body;
 
-    // Optional numeric fields
-    const rawHabitantes = body.habitantesMunicipio;
-    const rawDistancia = body.distanciaBosaCentroKm;
-
     if (!nombre || !pastor || !telefono || !municipio) {
       return NextResponse.json(
         {
@@ -65,31 +59,6 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 }
       );
-    }
-
-    // Validate optional numeric fields if provided (allow null to indicate pending data)
-    let habitantesMunicipio: number | null = null;
-    if (rawHabitantes !== undefined && rawHabitantes !== null && rawHabitantes !== "") {
-      const n = Number(rawHabitantes);
-      if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
-        return NextResponse.json(
-          { success: false, message: "habitantesMunicipio debe ser un entero válido." },
-          { status: 400 }
-        );
-      }
-      habitantesMunicipio = Math.round(n);
-    }
-
-    let distanciaBosaCentroKm: number | null = null;
-    if (rawDistancia !== undefined && rawDistancia !== null && rawDistancia !== "") {
-      const d = Number(rawDistancia);
-      if (!Number.isFinite(d) || d < 0) {
-        return NextResponse.json(
-          { success: false, message: "distanciaBosaCentroKm debe ser un número válido." },
-          { status: 400 }
-        );
-      }
-      distanciaBosaCentroKm = Number(d);
     }
 
     const iglesiaRef = await adminDb.collection("iglesias").add({
@@ -101,8 +70,6 @@ export async function POST(request: NextRequest) {
       direccion: direccion ? String(direccion).trim() : "",
       barrio: barrio ? String(barrio).trim() : "",
       descripcion: descripcion ? String(descripcion).trim() : "",
-      habitantesMunicipio: habitantesMunicipio,
-      distanciaBosaCentroKm: distanciaBosaCentroKm,
       horarios: cleanHorariosForSave(normalizeHorarios(body.horarios)),
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

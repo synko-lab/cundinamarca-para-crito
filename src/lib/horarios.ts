@@ -4,9 +4,9 @@ export type DiaSemana = (typeof DIAS_SEMANA)[number];
 
 export type HorarioSlot = {
   id: string;
-  hora: string;
   titulo: string;
-  descripcion: string;
+  horaInicio: string;
+  horaFin: string;
 };
 
 export type HorariosSemana = Record<string, HorarioSlot[]>;
@@ -26,9 +26,9 @@ export function normalizeHorarios(raw: unknown): HorariosSemana {
           .filter((s) => s && typeof s === "object")
           .map((s: any, i: number) => ({
             id: String(s.id ?? `${dia}-${i}`),
-            hora: String(s.hora ?? ""),
             titulo: String(s.titulo ?? ""),
-            descripcion: String(s.descripcion ?? ""),
+            horaInicio: String(s.horaInicio ?? s.hora ?? ""),
+            horaFin: String(s.horaFin ?? ""),
           }));
       }
     }
@@ -37,12 +37,12 @@ export function normalizeHorarios(raw: unknown): HorariosSemana {
 }
 
 /** Limpia la estructura para guardar: quita slots vacíos y días sin horarios. */
-export function cleanHorariosForSave(horarios: HorariosSemana): Record<string, { hora: string; titulo: string; descripcion: string }[]> {
-  const result: Record<string, { hora: string; titulo: string; descripcion: string }[]> = {};
+export function cleanHorariosForSave(horarios: HorariosSemana): Record<string, { titulo: string; horaInicio: string; horaFin: string }[]> {
+  const result: Record<string, { titulo: string; horaInicio: string; horaFin: string }[]> = {};
   for (const dia of DIAS_SEMANA) {
     const slots = (horarios[dia] || [])
-      .filter((s) => s.hora.trim() || s.titulo.trim() || s.descripcion.trim())
-      .map((s) => ({ hora: s.hora.trim(), titulo: s.titulo.trim(), descripcion: s.descripcion.trim() }));
+      .filter((s) => s.titulo.trim() || s.horaInicio.trim() || s.horaFin.trim())
+      .map((s) => ({ titulo: s.titulo.trim(), horaInicio: s.horaInicio.trim(), horaFin: s.horaFin.trim() }));
     if (slots.length > 0) result[dia] = slots;
   }
   return result;

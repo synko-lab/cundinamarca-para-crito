@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { uploadImageClient } from "@/lib/storageClient";
 import { ImageIcon, TrashIcon } from "./icons";
+import Lightbox from "./Lightbox";
 import type { Imagen } from "./IglesiaHero";
 
 export default function GaleriaSection({
@@ -19,6 +20,7 @@ export default function GaleriaSection({
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   async function handleFile(file: File) {
     setError(null);
@@ -92,11 +94,15 @@ export default function GaleriaSection({
         </div>
       ) : (
         <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
-          {images.map((img) => (
+          {images.map((img, i) => (
             <div key={img.id} className="group relative overflow-hidden rounded-lg border border-slate-200">
-              <div className="flex h-32 w-full items-center justify-center bg-slate-100">
-                <img src={img.url} alt={img.nombre} className="h-full w-full object-cover" />
-              </div>
+              <button
+                type="button"
+                onClick={() => setLightboxIndex(i)}
+                className="flex h-32 w-full items-center justify-center bg-slate-100"
+              >
+                <img src={img.url} alt={img.nombre} className="h-full w-full object-cover transition group-hover:scale-105" />
+              </button>
               {!readOnly && (
                 <button
                   onClick={() => handleDelete(img.id)}
@@ -109,6 +115,15 @@ export default function GaleriaSection({
             </div>
           ))}
         </div>
+      )}
+
+      {lightboxIndex !== null && (
+        <Lightbox
+          images={images}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={setLightboxIndex}
+        />
       )}
     </div>
   );
