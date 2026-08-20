@@ -13,6 +13,7 @@ export async function GET() {
         id: d.id,
         nombre: data.nombre ?? null,
         distanciaBosaCentroKm: data.distanciaBosaCentroKm ?? null,
+        distanciaBosaCentroMinutos: data.distanciaBosaCentroMinutos ?? null,
         habitantes: data.habitantes ?? null,
         extensionKm2: data.extensionKm2 ?? null,
         lat: data.lat ?? null,
@@ -54,6 +55,9 @@ export async function POST(request: NextRequest) {
     const distancia = optionalNonNegativeNumber(body.distanciaBosaCentroKm, "distanciaBosaCentroKm");
     if (distancia.error) return NextResponse.json({ success: false, message: distancia.error }, { status: 400 });
 
+    const distanciaMinutos = optionalNonNegativeNumber(body.distanciaBosaCentroMinutos, "distanciaBosaCentroMinutos");
+    if (distanciaMinutos.error) return NextResponse.json({ success: false, message: distanciaMinutos.error }, { status: 400 });
+
     const habitantes = optionalNonNegativeNumber(body.habitantes, "habitantes");
     if (habitantes.error) return NextResponse.json({ success: false, message: habitantes.error }, { status: 400 });
 
@@ -80,6 +84,7 @@ export async function POST(request: NextRequest) {
     const docRef = await adminDb.collection("municipios").add({
       nombre: String(nombre).trim(),
       distanciaBosaCentroKm: distancia.value,
+      distanciaBosaCentroMinutos: distanciaMinutos.value,
       habitantes: habitantes.value,
       extensionKm2: extension.value,
       lat,

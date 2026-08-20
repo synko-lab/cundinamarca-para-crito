@@ -51,6 +51,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const update: Record<string, unknown> = {
       nombre: String(nombre).trim(),
       distanciaBosaCentroKm: optionalNonNegativeNumber(body.distanciaBosaCentroKm),
+      distanciaBosaCentroMinutos: optionalNonNegativeNumber(body.distanciaBosaCentroMinutos),
       habitantes: optionalNonNegativeNumber(body.habitantes),
       extensionKm2: optionalNonNegativeNumber(body.extensionKm2),
       updatedAt: FieldValue.serverTimestamp(),

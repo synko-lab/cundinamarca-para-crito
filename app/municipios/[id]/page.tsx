@@ -6,6 +6,15 @@ function fmtNumber(n: number | null, suffix = "") {
   return `${n.toLocaleString("es-CO")}${suffix}`;
 }
 
+function fmtMinutos(n: number | null) {
+  if (n === null || n === undefined) return "Dato pendiente";
+  const horas = Math.floor(n / 60);
+  const minutos = Math.round(n % 60);
+  if (horas === 0) return `${minutos} min`;
+  if (minutos === 0) return `${horas} h`;
+  return `${horas} h ${minutos} min`;
+}
+
 function initials(nombre: string) {
   return (
     nombre
@@ -55,6 +64,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     ["Habitantes", fmtNumber(data.habitantes ?? null)],
     ["Extensión", fmtNumber(data.extensionKm2 ?? null, " km²")],
     ["Distancia a Bosa Centro", fmtNumber(data.distanciaBosaCentroKm ?? null, " km")],
+    ["Distancia a Bosa Centro (tiempo)", fmtMinutos(data.distanciaBosaCentroMinutos ?? null)],
     ["Coordenadas", data.lat != null && data.lng != null ? `${data.lat}, ${data.lng}` : "Dato pendiente"],
   ];
 

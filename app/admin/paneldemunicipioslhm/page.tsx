@@ -9,6 +9,7 @@ type MunicipioRow = {
   nombre: string;
   habitantes: number | null;
   distanciaBosaCentroKm: number | null;
+  distanciaBosaCentroMinutos: number | null;
   lat: number | null;
   lng: number | null;
   banderaUrl: string | null;

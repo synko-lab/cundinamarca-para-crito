@@ -147,6 +147,23 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
     setForm((s) => ({ ...s, [key]: value }));
   }
 
+  function handleAddNew() {
+    setForm(EMPTY_FORM);
+    setHorarios(emptyHorarios());
+    setStep(0);
+    setStepError(null);
+    setError(null);
+    setMessage(null);
+    setCreatedId(null);
+    setImages([]);
+    stageLogo(null);
+    stagePortada(null);
+    setGaleriaStaged((prev) => {
+      prev.forEach((p) => URL.revokeObjectURL(p.preview));
+      return [];
+    });
+  }
+
   function addSlot(dia: string) {
     setHorarios((h) => ({ ...h, [dia]: [...(h[dia] || []), { id: newSlotId(), titulo: "", horaInicio: "", horaFin: "" }] }));
   }
@@ -439,14 +456,25 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
             >
               Atrás
             </button>
-            <button
-              type="button"
-              onClick={handleSaveAll}
-              disabled={saving}
-              className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {saving ? "Guardando…" : isEdit || createdId ? "Guardar cambios" : "Guardar"}
-            </button>
+            <div className="flex items-center gap-3">
+              {!isEdit && createdId && (
+                <button
+                  type="button"
+                  onClick={handleAddNew}
+                  className="rounded-lg border border-emerald-700 px-5 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-50"
+                >
+                  Agregar nuevo
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                disabled={saving}
+                className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving ? "Guardando…" : isEdit || createdId ? "Guardar cambios" : "Guardar"}
+              </button>
+            </div>
           </div>
         </div>
       </>
