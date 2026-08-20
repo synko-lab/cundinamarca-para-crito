@@ -202,7 +202,7 @@ export default function MunicipioForm({ editId }: { editId?: string }) {
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-slate-700">Distancia a Bosa Centro (km)</span>
+            <span className="mb-1.5 block text-sm font-medium text-slate-700">Distancia a IBBF (km)</span>
             <input
               type="number"
               step="0.1"
@@ -213,7 +213,7 @@ export default function MunicipioForm({ editId }: { editId?: string }) {
             />
           </label>
           <div className="block">
-            <span className="mb-1.5 block text-sm font-medium text-slate-700">Distancia a Bosa Centro (tiempo)</span>
+            <span className="mb-1.5 block text-sm font-medium text-slate-700">Distancia a IBBF (tiempo)</span>
             <div className="flex items-center gap-2">
               <div className="flex-1">
                 <input

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { adminDb } from "@/lib/firebase-admin";
+import MunicipioRouteMapSection from "../../components/MunicipioRouteMapSection";
 
 function fmtNumber(n: number | null, suffix = "") {
   if (n === null || n === undefined) return "Dato pendiente";
@@ -63,8 +64,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const rows: [string, string][] = [
     ["Habitantes", fmtNumber(data.habitantes ?? null)],
     ["Extensión", fmtNumber(data.extensionKm2 ?? null, " km²")],
-    ["Distancia a Bosa Centro", fmtNumber(data.distanciaBosaCentroKm ?? null, " km")],
-    ["Distancia a Bosa Centro (tiempo)", fmtMinutos(data.distanciaBosaCentroMinutos ?? null)],
+    ["Distancia a IBBF", fmtNumber(data.distanciaBosaCentroKm ?? null, " km")],
+    ["Distancia a IBBF (tiempo)", fmtMinutos(data.distanciaBosaCentroMinutos ?? null)],
     ["Coordenadas", data.lat != null && data.lng != null ? `${data.lat}, ${data.lng}` : "Dato pendiente"],
   ];
 
@@ -112,6 +113,13 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
             ))}
           </dl>
         </div>
+
+        {data.lat != null && data.lng != null && (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <h2 className="mb-4 text-lg font-semibold text-slate-900">Ruta a IBBF</h2>
+            <MunicipioRouteMapSection nombre={nombre} lat={Number(data.lat)} lng={Number(data.lng)} />
+          </div>
+        )}
 
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
           <div className="flex items-center justify-between gap-3">
