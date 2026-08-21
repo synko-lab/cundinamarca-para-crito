@@ -17,6 +17,11 @@ export const MUNICIPIOS: Municipio[] = [
   { nombre: "Duitama", habitantes: null, latitud: null, longitud: null },
   { nombre: "Madrid", habitantes: null, latitud: null, longitud: null },
   { nombre: "Nemocón", habitantes: null, latitud: null, longitud: null },
+  { nombre: "Villeta", habitantes: null, latitud: null, longitud: null },
+  { nombre: "Funza", habitantes: null, latitud: null, longitud: null },
+  { nombre: "Tenjo", habitantes: null, latitud: null, longitud: null },
+  { nombre: "Cajicá", habitantes: null, latitud: null, longitud: null },
+  { nombre: "Guaduas", habitantes: null, latitud: null, longitud: null },
   { nombre: "Dato pendiente (otro)", habitantes: null, latitud: null, longitud: null },
 ];
 
