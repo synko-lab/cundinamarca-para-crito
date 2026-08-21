@@ -181,7 +181,6 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
       if (!form.nombre.trim()) return "Nombre es obligatorio.";
       if (!form.pastor.trim()) return "Pastor/Líder es obligatorio.";
       if (!form.telefono.trim()) return "Teléfono es obligatorio.";
-      if (form.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) return "Email inválido.";
     }
     if (target === 1) {
       if (!form.municipio.trim()) return "Municipio es obligatorio.";
@@ -507,7 +506,7 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
               <Input value={form.telefono} onChange={(v) => update("telefono", v)} placeholder="300 000 0000" />
             </Field>
             <Field label="Correo">
-              <Input value={form.email} onChange={(v) => update("email", v)} placeholder="correo@ejemplo.com" type="email" />
+              <Input value={form.email} onChange={(v) => update("email", v)} placeholder="correo@ejemplo.com" type="text" />
             </Field>
           </div>
         )}
