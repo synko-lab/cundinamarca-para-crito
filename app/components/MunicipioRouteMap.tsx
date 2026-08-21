@@ -82,7 +82,7 @@ export default function MunicipioRouteMap({
         html: `<div style="white-space:nowrap;background:#fff;border:1px solid #e2e8f0;border-radius:9999px;padding:2px 8px;font-size:11px;font-weight:600;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.15);">${distanciaKm.toLocaleString(
           "es-CO",
           { maximumFractionDigits: 1 }
-        )} km en línea recta</div>`,
+        )} km</div>`,
         iconSize: [0, 0],
       }),
       interactive: false,
