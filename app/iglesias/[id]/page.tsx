@@ -1,7 +1,17 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { adminDb } from "@/lib/firebase-admin";
 import { normalizeHorarios } from "@/lib/horarios";
 import IglesiaProfile from "./components/IglesiaProfile";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const doc = await adminDb.collection("iglesias").doc(id).get();
+  const data = doc.exists ? doc.data() : undefined;
+  const nombre = data?.nombre as string | undefined;
+  const municipio = data?.municipio as string | undefined;
+  return { title: nombre ? (municipio ? `${nombre} · ${municipio}` : nombre) : "Iglesia" };
+}
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

@@ -1,6 +1,14 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { adminDb } from "@/lib/firebase-admin";
 import MunicipioRouteMapSection from "../../components/MunicipioRouteMapSection";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const doc = await adminDb.collection("municipios").doc(id).get();
+  const nombre = doc.exists ? (doc.data()?.nombre as string | undefined) : undefined;
+  return { title: nombre || "Municipio" };
+}
 
 function fmtNumber(n: number | null, suffix = "") {
   if (n === null || n === undefined) return "Dato pendiente";
