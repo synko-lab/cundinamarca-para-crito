@@ -78,27 +78,41 @@ export default function CundinamarcaMap({ municipios }: { municipios: MunicipioP
       maxZoom: MAX_ZOOM,
     }).addTo(map);
 
+    const hasHover = window.matchMedia("(hover: hover)").matches;
+
     municipios.forEach((m) => {
       const marker = L.marker([m.lat, m.lng], { icon: pinIcon(m) }).addTo(map);
       const habitantesTxt = m.habitantes ? `${m.habitantes.toLocaleString("es-CO")} habitantes` : "Dato pendiente";
       const flagImg = m.banderaUrl
         ? `<img src="${m.banderaUrl}" style="width:32px;height:32px;border-radius:6px;object-fit:cover;flex-shrink:0" />`
         : "";
+      const verPerfilLink = hasHover
+        ? ""
+        : `<a href="/municipios/${m.id}" style="display:block;margin-top:6px;font-size:11px;font-weight:600;color:#003893;">Ver perfil →</a>`;
       marker.bindPopup(
-        `<div style="display:flex;align-items:center;gap:8px;font-family:inherit;">
-           ${flagImg}
-           <div>
-             <div style="font-weight:600;font-size:13px;color:#0f172a;">${m.nombre}</div>
-             <div style="font-size:11px;color:#64748b;">${habitantesTxt}</div>
+        `<div style="font-family:inherit;">
+           <div style="display:flex;align-items:center;gap:8px;">
+             ${flagImg}
+             <div>
+               <div style="font-weight:600;font-size:13px;color:#0f172a;">${m.nombre}</div>
+               <div style="font-size:11px;color:#64748b;">${habitantesTxt}</div>
+             </div>
            </div>
+           ${verPerfilLink}
          </div>`,
-        { closeButton: false, offset: [0, -4] }
+        { closeButton: !hasHover, offset: [0, -4] }
       );
-      marker.on("mouseover", () => marker.openPopup());
-      marker.on("mouseout", () => marker.closePopup());
-      marker.on("click", () => {
-        router.push(`/municipios/${m.id}`);
-      });
+
+      if (hasHover) {
+        // Escritorio: la info aparece al pasar el cursor, y clic navega directo al perfil.
+        marker.on("mouseover", () => marker.openPopup());
+        marker.on("mouseout", () => marker.closePopup());
+        marker.on("click", () => {
+          router.push(`/municipios/${m.id}`);
+        });
+      }
+      // Táctil (sin hover): el propio tap de bindPopup abre el popup de inmediato;
+      // navegar requiere un segundo tap sobre el enlace "Ver perfil".
     });
 
     return () => {

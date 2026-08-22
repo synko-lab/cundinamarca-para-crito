@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { adminDb } from "@/lib/firebase-admin";
 import MapSection from "./components/MapSection";
+import MunicipioSelect from "./components/MunicipioSelect";
 import type { MunicipioPin } from "./components/CundinamarcaMap";
 
 export const dynamic = "force-dynamic";
@@ -25,33 +26,106 @@ export default async function Home() {
     })
     .filter((m): m is MunicipioPin => m.lat !== null && m.lng !== null);
 
+  const municipiosParaSelect = municipiosSnap.docs
+    .map((d) => ({ id: d.id, nombre: (d.data().nombre as string) ?? "(sin nombre)" }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+
   const totalMunicipios = municipiosSnap.size;
   const totalIglesias = iglesiasSnap.data().count;
 
   return (
     <div
-      className="min-h-screen bg-white flex justify-center items-center w-full"
+      className="min-h-screen w-full bg-white"
       style={{ backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)", backgroundSize: "22px 22px" }}
     >
-      <div className="w-11/12 max-w-7xl">
-        {municipios.length === 0 ? (
-          <>
-            <HeroCard totalMunicipios={totalMunicipios} totalIglesias={totalIglesias} enMapa={municipios.length} floating={false} />
-            <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-16 text-center">
-              <p className="text-sm font-medium text-slate-600">Aún no hay municipios con coordenadas registradas.</p>
-              <p className="mt-1 text-sm text-slate-400">Vuelve pronto — estamos completando el mapa de Cundinamarca.</p>
+      {/* Mobile: título + stats arriba, mapa ocupa el resto, selector y botón abajo */}
+      <div className="flex h-[100dvh] flex-col sm:hidden">
+        <div className="shrink-0 space-y-4 p-4">
+          <TitleStats totalMunicipios={totalMunicipios} totalIglesias={totalIglesias} enMapa={municipios.length} />
+          <MunicipioSelect municipios={municipiosParaSelect} />
+        </div>
+
+        <div className="min-h-0 flex-1 px-4">
+          {municipios.length === 0 ? (
+            <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 text-center">
+              <p className="text-sm text-slate-400">Aún no hay municipios con coordenadas registradas.</p>
             </div>
-          </>
-        ) : (
-          <div className="relative">
-            <MapSection municipios={municipios} />
-            <div className="pointer-events-none absolute inset-0 z-[1100] flex items-start p-4 sm:p-6">
-              <div className="pointer-events-auto w-full max-w-xs">
-                <HeroCard totalMunicipios={totalMunicipios} totalIglesias={totalIglesias} enMapa={municipios.length} floating />
+          ) : (
+            <MapSection municipios={municipios} className="h-full w-full" />
+          )}
+        </div>
+
+        <div className="shrink-0 p-4">
+          <Link
+            href="/iglesias"
+            className="block w-full rounded-lg bg-[#003893] px-4 py-3 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-[#002d75]"
+          >
+            Ver directorio de iglesias
+          </Link>
+        </div>
+      </div>
+
+      {/* Desktop: tarjeta flotante sobre el mapa */}
+      <div className="hidden min-h-screen w-full items-center justify-center sm:flex">
+        <div className="w-11/12 max-w-7xl">
+          {municipios.length === 0 ? (
+            <>
+              <HeroCard totalMunicipios={totalMunicipios} totalIglesias={totalIglesias} enMapa={municipios.length} floating={false} />
+              <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-16 text-center">
+                <p className="text-sm font-medium text-slate-600">Aún no hay municipios con coordenadas registradas.</p>
+                <p className="mt-1 text-sm text-slate-400">Vuelve pronto — estamos completando el mapa de Cundinamarca.</p>
+              </div>
+            </>
+          ) : (
+            <div className="relative">
+              <MapSection municipios={municipios} />
+              <div className="pointer-events-none absolute inset-0 z-[1100] flex items-start p-4 sm:p-6">
+                <div className="pointer-events-auto w-full max-w-xs">
+                  <HeroCard totalMunicipios={totalMunicipios} totalIglesias={totalIglesias} enMapa={municipios.length} floating />
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TitleStats({
+  totalMunicipios,
+  totalIglesias,
+  enMapa,
+}: {
+  totalMunicipios: number;
+  totalIglesias: number;
+  enMapa: number;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-3 h-2 w-14 overflow-hidden rounded-full">
+        <div className="h-1/2 bg-[#FCD116]" />
+        <div className="flex h-1/2">
+          <div className="w-1/2 bg-[#003893]" />
+          <div className="w-1/2 bg-[#CE1126]" />
+        </div>
+      </div>
+
+      <h1 className="text-xl font-bold tracking-tight text-slate-900">Cundinamarca para Cristo</h1>
+
+      <div className="mt-4 grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 pt-3">
+        <div className="px-2 text-center">
+          <div className="text-lg font-bold text-[#003893]">{totalMunicipios}</div>
+          <div className="text-[11px] text-slate-500">Municipios</div>
+        </div>
+        <div className="px-2 text-center">
+          <div className="text-lg font-bold text-[#CE1126]">{totalIglesias}</div>
+          <div className="text-[11px] text-slate-500">Iglesias</div>
+        </div>
+        <div className="px-2 text-center">
+          <div className="text-lg font-bold text-[#FCD116] [text-shadow:0_0_0.5px_#b8940e]">{enMapa}</div>
+          <div className="text-[11px] text-slate-500">En el mapa</div>
+        </div>
       </div>
     </div>
   );

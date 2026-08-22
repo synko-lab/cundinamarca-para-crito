@@ -12,9 +12,15 @@ const CundinamarcaMap = dynamic(() => import("./CundinamarcaMap"), {
   ),
 });
 
-export default function MapSection({ municipios }: { municipios: MunicipioPin[] }) {
+export default function MapSection({
+  municipios,
+  className = "h-[520px] w-full sm:h-[680px]",
+}: {
+  municipios: MunicipioPin[];
+  className?: string;
+}) {
   return (
-    <div className="h-[520px] w-full overflow-hidden rounded-2xl border border-slate-200 shadow-sm sm:h-[680px]">
+    <div className={`overflow-hidden rounded-2xl border border-slate-200 shadow-sm ${className}`}>
       <CundinamarcaMap municipios={municipios} />
     </div>
   );
