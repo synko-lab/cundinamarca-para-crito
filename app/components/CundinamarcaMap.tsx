@@ -27,7 +27,7 @@ export type IglesiaPin = {
 const CUNDINAMARCA_CENTER: [number, number] = [4.85, -74.2];
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 15;
-const FOCUS_ZOOM = 14;
+const FOCUS_ZOOM = 12;
 
 function initials(nombre: string) {
   return (
