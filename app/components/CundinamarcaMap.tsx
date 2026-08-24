@@ -43,6 +43,10 @@ function initials(nombre: string) {
   );
 }
 
+function cornerBadge(content: string, borderColor: string, side: "left" | "right") {
+  return `<div style="position:absolute;bottom:2px;${side}:-8px;min-width:16px;height:16px;padding:0 2px;border-radius:9999px;background:#fff;border:2px solid ${borderColor};display:flex;align-items:center;justify-content:center;gap:1px;font-size:9px;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,0.35);">${content}</div>`;
+}
+
 function pinIcon(m: Pick<MunicipioPin, "nombre" | "banderaUrl">, iglesiaCount: number) {
   const badge = m.banderaUrl
     ? `<img src="${m.banderaUrl}" style="width:100%;height:100%;object-fit:cover;" />`
@@ -50,10 +54,18 @@ function pinIcon(m: Pick<MunicipioPin, "nombre" | "banderaUrl">, iglesiaCount: n
         m.nombre
       )}</div>`;
 
-  const countBubble =
-    iglesiaCount > 0
-      ? `<div style="display:flex;align-items:center;gap:1px;">⛪<span>${iglesiaCount}</span></div>`
-      : `😢`;
+  // Hasta 2 iglesias: un ícono por cada esquina inferior. Con más de 2, la
+  // esquina derecha suma el conteo en vez de repetir el ícono.
+  let corners: string;
+  if (iglesiaCount === 0) {
+    corners = cornerBadge("😢", "#94a3b8", "right");
+  } else if (iglesiaCount === 1) {
+    corners = cornerBadge("⛪", "#047857", "right");
+  } else if (iglesiaCount === 2) {
+    corners = cornerBadge("⛪", "#047857", "left") + cornerBadge("⛪", "#047857", "right");
+  } else {
+    corners = cornerBadge("⛪", "#047857", "left") + cornerBadge(`⛪${iglesiaCount}`, "#047857", "right");
+  }
 
   return L.divIcon({
     className: "",
@@ -63,11 +75,7 @@ function pinIcon(m: Pick<MunicipioPin, "nombre" | "banderaUrl">, iglesiaCount: n
           ${badge}
         </div>
         <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid #CE1126;"></div>
-        <div style="position:absolute;top:-6px;right:-8px;min-width:18px;height:18px;padding:0 3px;border-radius:9999px;background:#fff;border:2px solid ${
-          iglesiaCount > 0 ? "#047857" : "#94a3b8"
-        };display:flex;align-items:center;justify-content:center;font-size:10px;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,0.35);">
-          ${countBubble}
-        </div>
+        ${corners}
       </div>
     `,
     iconSize: [36, 46],
