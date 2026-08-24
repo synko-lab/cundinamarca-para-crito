@@ -139,6 +139,7 @@ export default function CundinamarcaMap({
   const iglesiaAllMarkersRef = useRef<L.Marker[]>([]);
   const iglesiaFocusMarkersRef = useRef<L.Marker[]>([]);
   const focusedRef = useRef(false);
+  const prevFocusedIdRef = useRef<string | null>(null);
   const router = useRouter();
   const onFocusMunicipioRef = useRef(onFocusMunicipio);
   onFocusMunicipioRef.current = onFocusMunicipio;
@@ -251,10 +252,15 @@ export default function CundinamarcaMap({
     iglesiasFocusLayer.clearLayers();
     iglesiaFocusMarkersRef.current = [];
     focusedRef.current = Boolean(focusedMunicipioId);
+    const veniaEnfocado = prevFocusedIdRef.current !== null;
+    prevFocusedIdRef.current = focusedMunicipioId;
 
     if (!focusedMunicipioId) {
       if (map.hasLayer(iglesiasFocusLayer)) map.removeLayer(iglesiasFocusLayer);
-      map.flyTo(CUNDINAMARCA_CENTER, 9);
+      // Solo recentra al salir de un municipio enfocado, no en cada
+      // re-ejecución de este efecto mientras ya se está sin enfoque
+      // (evita resetear un zoom manual que el usuario haya hecho).
+      if (veniaEnfocado) map.flyTo(CUNDINAMARCA_CENTER, 9);
       return;
     }
 
