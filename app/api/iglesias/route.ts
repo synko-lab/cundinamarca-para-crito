@@ -22,6 +22,8 @@ export async function GET() {
         direccion: data.direccion ?? null,
         barrio: data.barrio ?? null,
         descripcion: data.descripcion ?? null,
+        lat: typeof data.lat === "number" ? data.lat : null,
+        lng: typeof data.lng === "number" ? data.lng : null,
         createdAt: data.createdAt && data.createdAt.toMillis ? data.createdAt.toMillis() : data.createdAt ?? null,
         updatedAt: data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : data.updatedAt ?? null,
       };
@@ -51,6 +53,23 @@ export async function POST(request: NextRequest) {
       descripcion,
     } = body;
 
+    let lat: number | null = null;
+    let lng: number | null = null;
+    if (body.lat !== undefined && body.lat !== null && body.lat !== "") {
+      const n = Number(body.lat);
+      if (!Number.isFinite(n) || n < -90 || n > 90) {
+        return NextResponse.json({ success: false, message: "Latitud inválida." }, { status: 400 });
+      }
+      lat = n;
+    }
+    if (body.lng !== undefined && body.lng !== null && body.lng !== "") {
+      const n = Number(body.lng);
+      if (!Number.isFinite(n) || n < -180 || n > 180) {
+        return NextResponse.json({ success: false, message: "Longitud inválida." }, { status: 400 });
+      }
+      lng = n;
+    }
+
     if (!nombre || !pastor || !telefono || !municipio) {
       return NextResponse.json(
         {
@@ -70,6 +89,8 @@ export async function POST(request: NextRequest) {
       direccion: direccion ? String(direccion).trim() : "",
       barrio: barrio ? String(barrio).trim() : "",
       descripcion: descripcion ? String(descripcion).trim() : "",
+      lat,
+      lng,
       horarios: cleanHorariosForSave(normalizeHorarios(body.horarios)),
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

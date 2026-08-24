@@ -23,6 +23,8 @@ type FormState = {
   direccion: string;
   barrio: string;
   descripcion: string;
+  lat: string;
+  lng: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -34,6 +36,8 @@ const EMPTY_FORM: FormState = {
   direccion: "",
   barrio: "",
   descripcion: "",
+  lat: "",
+  lng: "",
 };
 
 const STEPS = [
@@ -123,6 +127,8 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
           direccion: it.direccion ?? "",
           barrio: it.barrio ?? "",
           descripcion: it.descripcion ?? "",
+          lat: it.lat ?? "",
+          lng: it.lng ?? "",
         });
         setHorarios(normalizeHorarios(it.horarios));
       })
@@ -267,6 +273,8 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
         direccion: form.direccion,
         barrio: form.barrio,
         descripcion: form.descripcion,
+        lat: form.lat,
+        lng: form.lng,
         horarios: cleanHorariosForSave(horarios),
       };
 
@@ -536,6 +544,18 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
                 <Input value={form.barrio} onChange={(v) => update("barrio", v)} placeholder="Nombre del barrio o vereda" />
               </Field>
             </div>
+
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <Field label="Latitud">
+                <Input value={form.lat} onChange={(v) => update("lat", v)} placeholder="4.6xxxxx" type="number" step="0.000001" />
+              </Field>
+              <Field label="Longitud">
+                <Input value={form.lng} onChange={(v) => update("lng", v)} placeholder="-74.0xxxxx" type="number" step="0.000001" />
+              </Field>
+            </div>
+            <p className="-mt-3 text-xs text-slate-400">
+              Sin coordenadas, la iglesia no aparecerá marcada en el mapa del municipio.
+            </p>
           </div>
         )}
 

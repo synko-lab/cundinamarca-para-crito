@@ -125,7 +125,12 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         {data.lat != null && data.lng != null && (
           <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <h2 className="mb-4 text-lg font-semibold text-slate-900">Ruta a IBBF</h2>
-            <MunicipioRouteMapSection nombre={nombre} lat={Number(data.lat)} lng={Number(data.lng)} />
+            <MunicipioRouteMapSection
+              nombre={nombre}
+              lat={Number(data.lat)}
+              lng={Number(data.lng)}
+              minutos={data.distanciaBosaCentroMinutos ?? null}
+            />
           </div>
         )}
 

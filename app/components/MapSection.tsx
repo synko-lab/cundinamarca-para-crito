@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { MunicipioPin } from "./CundinamarcaMap";
+import type { MunicipioPin, IglesiaPin } from "./CundinamarcaMap";
 
 const CundinamarcaMap = dynamic(() => import("./CundinamarcaMap"), {
   ssr: false,
@@ -14,14 +14,18 @@ const CundinamarcaMap = dynamic(() => import("./CundinamarcaMap"), {
 
 export default function MapSection({
   municipios,
+  iglesias,
+  focusedMunicipioId,
   className = "h-[520px] w-full sm:h-[680px]",
 }: {
   municipios: MunicipioPin[];
+  iglesias?: IglesiaPin[];
+  focusedMunicipioId?: string | null;
   className?: string;
 }) {
   return (
     <div className={`overflow-hidden rounded-2xl border border-slate-200 shadow-sm ${className}`}>
-      <CundinamarcaMap municipios={municipios} />
+      <CundinamarcaMap municipios={municipios} iglesias={iglesias} focusedMunicipioId={focusedMunicipioId} />
     </div>
   );
 }

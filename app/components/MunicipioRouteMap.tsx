@@ -18,6 +18,15 @@ function haversineKm(a: [number, number], b: [number, number]) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+function fmtMinutos(n: number | null) {
+  if (n === null || n === undefined) return null;
+  const horas = Math.floor(n / 60);
+  const minutos = Math.round(n % 60);
+  if (horas === 0) return `${minutos} min`;
+  if (minutos === 0) return `${horas} h`;
+  return `${horas} h ${minutos} min`;
+}
+
 function pointIcon(color: string) {
   return L.divIcon({
     className: "",
@@ -31,10 +40,12 @@ export default function MunicipioRouteMap({
   nombre,
   lat,
   lng,
+  minutos = null,
 }: {
   nombre: string;
   lat: number;
   lng: number;
+  minutos?: number | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -44,12 +55,15 @@ export default function MunicipioRouteMap({
 
     const origen: [number, number] = [lat, lng];
     const map = L.map(containerRef.current, {
+      dragging: false,
+      touchZoom: false,
+      doubleClickZoom: false,
       scrollWheelZoom: false,
+      boxZoom: false,
+      keyboard: false,
       zoomControl: false,
     });
     mapRef.current = map;
-
-    L.control.zoom({ position: "bottomright" }).addTo(map);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -68,6 +82,10 @@ export default function MunicipioRouteMap({
       });
 
     const distanciaKm = haversineKm(origen, DESTINO);
+    const tiempoTxt = fmtMinutos(minutos);
+    const etiqueta = [`${distanciaKm.toLocaleString("es-CO", { maximumFractionDigits: 1 })} km`, tiempoTxt]
+      .filter(Boolean)
+      .join(" · ");
 
     const line = L.polyline([origen, DESTINO], {
       color: "#CE1126",
@@ -79,10 +97,7 @@ export default function MunicipioRouteMap({
     L.marker(mid, {
       icon: L.divIcon({
         className: "",
-        html: `<div style="white-space:nowrap;background:#fff;border:1px solid #e2e8f0;border-radius:9999px;padding:2px 8px;font-size:11px;font-weight:600;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.15);">${distanciaKm.toLocaleString(
-          "es-CO",
-          { maximumFractionDigits: 1 }
-        )} km</div>`,
+        html: `<div style="white-space:nowrap;background:#fff;border:1px solid #e2e8f0;border-radius:9999px;padding:3px 10px;font-size:12px;font-weight:700;color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,0.15);">${etiqueta}</div>`,
         iconSize: [0, 0],
       }),
       interactive: false,
@@ -94,7 +109,7 @@ export default function MunicipioRouteMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [nombre, lat, lng]);
+  }, [nombre, lat, lng, minutos]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }

@@ -55,6 +55,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       );
     }
 
+    let lat: number | null = null;
+    let lng: number | null = null;
+    if (body.lat !== undefined && body.lat !== null && body.lat !== "") {
+      const n = Number(body.lat);
+      if (!Number.isFinite(n) || n < -90 || n > 90) {
+        return NextResponse.json({ success: false, message: "Latitud inválida." }, { status: 400 });
+      }
+      lat = n;
+    }
+    if (body.lng !== undefined && body.lng !== null && body.lng !== "") {
+      const n = Number(body.lng);
+      if (!Number.isFinite(n) || n < -180 || n > 180) {
+        return NextResponse.json({ success: false, message: "Longitud inválida." }, { status: 400 });
+      }
+      lng = n;
+    }
+
     const update = {
       nombre: String(nombre).trim(),
       pastor: String(pastor).trim(),
@@ -64,6 +81,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       direccion: direccion ? String(direccion).trim() : "",
       barrio: barrio ? String(barrio).trim() : "",
       descripcion: descripcion ? String(descripcion).trim() : "",
+      lat,
+      lng,
       horarios: cleanHorariosForSave(normalizeHorarios(body.horarios)),
       updatedAt: FieldValue.serverTimestamp(),
     };
