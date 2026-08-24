@@ -8,6 +8,7 @@ import type { MunicipioPin, IglesiaPin } from "./CundinamarcaMap";
 
 export default function MobileHome({
   totalMunicipios,
+  totalHabitantes,
   totalIglesias,
   municipios,
   iglesias,
@@ -15,6 +16,7 @@ export default function MobileHome({
 }: {
   totalMunicipios: number;
   totalIglesias: number;
+  totalHabitantes: string;
   municipios: MunicipioPin[];
   iglesias: IglesiaPin[];
   municipiosOptions: MunicipioOption[];
@@ -22,22 +24,15 @@ export default function MobileHome({
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const focusedNombre = focusedId ? municipiosOptions.find((m) => m.id === focusedId)?.nombre : null;
   const iglesiasEnFoco = focusedNombre ? iglesias.filter((i) => i.municipio === focusedNombre).length : 0;
-
   return (
     <div className="flex h-[100dvh] flex-col sm:hidden">
       <div className="shrink-0 space-y-3 p-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-3 h-2 w-14 overflow-hidden rounded-full">
-            <div className="h-1/2 bg-[#FCD116]" />
-            <div className="flex h-1/2">
-              <div className="w-1/2 bg-[#003893]" />
-              <div className="w-1/2 bg-[#CE1126]" />
-            </div>
-          </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+      
 
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Cundinamarca para Cristo</h1>
 
-          <div className="mt-4 grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 pt-3">
+          <div className="mt-4 grid grid-cols-3 divide-x divide-slate-200 border-t border-slate-100 pt-2">
             <div className="px-2 text-center">
               <div className="text-lg font-bold text-[#003893]">{totalMunicipios}</div>
               <div className="text-[11px] text-slate-500">Municipios</div>
@@ -46,9 +41,9 @@ export default function MobileHome({
               <div className="text-lg font-bold text-[#CE1126]">{totalIglesias}</div>
               <div className="text-[11px] text-slate-500">Iglesias</div>
             </div>
-            <div className="px-2 text-center">
-              <div className="text-lg font-bold text-[#FCD116] [text-shadow:0_0_0.5px_#b8940e]">{municipios.length}</div>
-              <div className="text-[11px] text-slate-500">En el mapa</div>
+                <div className="px-2 text-center">
+              <div className="text-lg font-bold text-yellow-500">{totalHabitantes}</div>
+              <div className="text-[11px] text-slate-500">Habitantes</div>
             </div>
           </div>
         </div>

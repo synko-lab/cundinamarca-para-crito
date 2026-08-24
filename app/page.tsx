@@ -56,6 +56,7 @@ export default async function Home() {
       <MobileHome
         totalMunicipios={totalMunicipios}
         totalIglesias={totalIglesias}
+        totalHabitantes={"+3 M"}
         municipios={municipios}
         iglesias={iglesias}
         municipiosOptions={municipiosParaSelect}
