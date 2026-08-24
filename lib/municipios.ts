@@ -8,7 +8,7 @@ export type Municipio = {
 // Lista inicial de municipios de Cundinamarca preparada para ser completada
 // NOTA: No incluir datos inventados. De momento los valores numéricos quedan en null.
 export const MUNICIPIOS: Municipio[] = [
-  { nombre: "Fusagasugá", habitantes: null, latitud: null, longitud: null },
+  { nombre: "Fusagasuga", habitantes: null, latitud: null, longitud: null },
   { nombre: "Soacha", habitantes: null, latitud: null, longitud: null },
   { nombre: "Girardot", habitantes: null, latitud: null, longitud: null },
   { nombre: "Zipaquirá", habitantes: null, latitud: null, longitud: null },
