@@ -97,9 +97,9 @@ function iglesiaPinIcon(i: Pick<IglesiaPin, "nombre" | "logoUrl">) {
 function dotIcon() {
   return L.divIcon({
     className: "",
-    html: `<div style="width:10px;height:10px;border-radius:50%;background:#CE1126;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.45);"></div>`,
-    iconSize: [10, 10],
-    iconAnchor: [5, 5],
+    html: `<div class="map-pulse-dot" style="width:16px;height:16px;border-radius:50%;background:#CE1126;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.5);"></div>`,
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
   });
 }
 
@@ -188,18 +188,22 @@ export default function CundinamarcaMap({
 
     function syncLayers() {
       const zoom = map.getZoom();
+
+      // Leaflet reabre automáticamente los tooltips "permanent" apenas su capa
+      // se añade al mapa, así que las capas deben resolverse ANTES de aplicar
+      // la visibilidad de tooltips, o el zoom mínimo del overlay no se respeta.
+      if (!focusedRef.current) {
+        if (zoom >= MUNICIPIO_MIN_ZOOM) {
+          if (!map.hasLayer(municipiosLayer)) map.addLayer(municipiosLayer);
+          if (map.hasLayer(iglesiasOverviewLayer)) map.removeLayer(iglesiasOverviewLayer);
+        } else {
+          if (map.hasLayer(municipiosLayer)) map.removeLayer(municipiosLayer);
+          if (!map.hasLayer(iglesiasOverviewLayer)) map.addLayer(iglesiasOverviewLayer);
+        }
+      }
+
       applyTooltipVisibility(municipioMarkersRef.current, zoom);
       applyTooltipVisibility(iglesiaMarkersRef.current, zoom);
-
-      if (focusedRef.current) return;
-
-      if (zoom >= MUNICIPIO_MIN_ZOOM) {
-        if (!map.hasLayer(municipiosLayer)) map.addLayer(municipiosLayer);
-        if (map.hasLayer(iglesiasOverviewLayer)) map.removeLayer(iglesiasOverviewLayer);
-      } else {
-        if (map.hasLayer(municipiosLayer)) map.removeLayer(municipiosLayer);
-        if (!map.hasLayer(iglesiasOverviewLayer)) map.addLayer(iglesiasOverviewLayer);
-      }
     }
 
     syncLayers();
@@ -258,8 +262,8 @@ export default function CundinamarcaMap({
       iglesiaMarkersRef.current.push(marker);
     });
 
-    applyTooltipVisibility(iglesiaMarkersRef.current, FOCUS_ZOOM);
     if (!map.hasLayer(iglesiasLayer)) map.addLayer(iglesiasLayer);
+    applyTooltipVisibility(iglesiaMarkersRef.current, FOCUS_ZOOM);
     map.flyTo([municipio.lat, municipio.lng], FOCUS_ZOOM);
   }, [focusedMunicipioId, municipios, iglesias, router]);
 

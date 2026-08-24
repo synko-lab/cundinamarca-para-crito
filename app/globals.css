@@ -109,4 +109,20 @@ input::placeholder, textarea::placeholder{ color: #9ca3af; }
 /* subtle field helper */
 .field .help{ font-size:0.85rem; color:var(--muted); margin-top:6px; }
 
+/* Punto rojo pulsante para iglesias en el mapa (vista general alejada) */
+@keyframes mapPulseDot {
+  0% { transform: scale(0.6); opacity: 0.8; }
+  70% { transform: scale(2.4); opacity: 0; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+.map-pulse-dot { position: relative; }
+.map-pulse-dot::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  background: rgba(206, 17, 38, 0.55);
+  animation: mapPulseDot 1.8s ease-out infinite;
+}
+
 
