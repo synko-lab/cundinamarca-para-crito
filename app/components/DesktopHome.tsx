@@ -9,12 +9,14 @@ import type { MunicipioPin, IglesiaPin } from "./CundinamarcaMap";
 export default function DesktopHome({
   totalMunicipios,
   totalIglesias,
+  totalHabitantes,
   municipios,
   iglesias,
   municipiosOptions,
 }: {
   totalMunicipios: number;
   totalIglesias: number;
+  totalHabitantes: string;
   municipios: MunicipioPin[];
   iglesias: IglesiaPin[];
   municipiosOptions: MunicipioOption[];
@@ -29,7 +31,7 @@ export default function DesktopHome({
         <HeroCard
           totalMunicipios={totalMunicipios}
           totalIglesias={totalIglesias}
-          enMapa={municipios.length}
+          totalHabitantes={totalHabitantes}
           floating={false}
           municipiosOptions={municipiosOptions}
           focusedId={focusedId}
@@ -53,7 +55,7 @@ export default function DesktopHome({
           <HeroCard
             totalMunicipios={totalMunicipios}
             totalIglesias={totalIglesias}
-            enMapa={municipios.length}
+            totalHabitantes={totalHabitantes}
             floating
             municipiosOptions={municipiosOptions}
             focusedId={focusedId}
@@ -70,7 +72,7 @@ export default function DesktopHome({
 function HeroCard({
   totalMunicipios,
   totalIglesias,
-  enMapa,
+  totalHabitantes,
   floating,
   municipiosOptions,
   focusedId,
@@ -80,7 +82,7 @@ function HeroCard({
 }: {
   totalMunicipios: number;
   totalIglesias: number;
-  enMapa: number;
+  totalHabitantes: string;
   floating: boolean;
   municipiosOptions: MunicipioOption[];
   focusedId: string | null;
@@ -176,9 +178,9 @@ function HeroCard({
               "text-[#FCD116] [text-shadow:0_0_0.5px_#b8940e]",
             ].join(" ")}
           >
-            {enMapa}
+            {totalHabitantes}
           </div>
-          <div className="text-[11px] text-slate-500">En el mapa</div>
+          <div className="text-[11px] text-slate-500">Habitantes</div>
         </div>
       </div>
     </div>

@@ -68,6 +68,7 @@ export default async function Home() {
           <DesktopHome
             totalMunicipios={totalMunicipios}
             totalIglesias={totalIglesias}
+            totalHabitantes={"+3 M"}
             municipios={municipios}
             iglesias={iglesias}
             municipiosOptions={municipiosParaSelect}
