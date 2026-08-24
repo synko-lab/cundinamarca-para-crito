@@ -28,6 +28,9 @@ const CUNDINAMARCA_CENTER: [number, number] = [4.85, -74.2];
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 15;
 const FOCUS_ZOOM = 12;
+// Con el mapa muy alejado (~70 municipios a la vez) las etiquetas permanentes
+// se amontonan y se vuelven ilegibles. Se ocultan hasta este nivel de zoom.
+const TOOLTIP_MIN_ZOOM = 11;
 
 function initials(nombre: string) {
   return (
@@ -95,6 +98,13 @@ function bindPermanentTooltip(marker: L.Marker, content: string) {
   });
 }
 
+function applyTooltipVisibility(markers: L.Marker[], zoom: number) {
+  markers.forEach((marker) => {
+    if (zoom >= TOOLTIP_MIN_ZOOM) marker.openTooltip();
+    else marker.closeTooltip();
+  });
+}
+
 export default function CundinamarcaMap({
   municipios,
   iglesias = [],
@@ -108,6 +118,8 @@ export default function CundinamarcaMap({
   const mapRef = useRef<L.Map | null>(null);
   const municipiosLayerRef = useRef<L.LayerGroup | null>(null);
   const iglesiasLayerRef = useRef<L.LayerGroup | null>(null);
+  const municipioMarkersRef = useRef<L.Marker[]>([]);
+  const iglesiaMarkersRef = useRef<L.Marker[]>([]);
   const router = useRouter();
 
   // Monta el mapa y la capa de municipios una sola vez.
@@ -147,6 +159,14 @@ export default function CundinamarcaMap({
          </div>`
       );
       marker.on("click", () => router.push(`/municipios/${m.id}`));
+      municipioMarkersRef.current.push(marker);
+    });
+
+    applyTooltipVisibility(municipioMarkersRef.current, map.getZoom());
+    map.on("zoomend", () => {
+      const zoom = map.getZoom();
+      applyTooltipVisibility(municipioMarkersRef.current, zoom);
+      applyTooltipVisibility(iglesiaMarkersRef.current, zoom);
     });
 
     return () => {
@@ -154,6 +174,8 @@ export default function CundinamarcaMap({
       mapRef.current = null;
       municipiosLayerRef.current = null;
       iglesiasLayerRef.current = null;
+      municipioMarkersRef.current = [];
+      iglesiaMarkersRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -167,6 +189,7 @@ export default function CundinamarcaMap({
     if (!map || !municipiosLayer || !iglesiasLayer) return;
 
     iglesiasLayer.clearLayers();
+    iglesiaMarkersRef.current = [];
 
     if (!focusedMunicipioId) {
       if (!map.hasLayer(municipiosLayer)) map.addLayer(municipiosLayer);
@@ -193,8 +216,10 @@ export default function CundinamarcaMap({
          </div>`
       );
       marker.on("click", () => router.push(`/iglesias/${ig.id}`));
+      iglesiaMarkersRef.current.push(marker);
     });
 
+    applyTooltipVisibility(iglesiaMarkersRef.current, FOCUS_ZOOM);
     if (!map.hasLayer(iglesiasLayer)) map.addLayer(iglesiasLayer);
     map.flyTo([municipio.lat, municipio.lng], FOCUS_ZOOM);
   }, [focusedMunicipioId, municipios, iglesias, router]);
