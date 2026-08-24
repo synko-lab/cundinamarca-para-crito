@@ -75,10 +75,12 @@ export default function MobileHome({
         )}
 
         {focusedNombre && iglesiasEnFoco === 0 && (
-          <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-400">
-            Aún no hay iglesias con coordenadas registradas en {focusedNombre}. Puede que sí existan iglesias en el
-            directorio, solo que sin ubicación cargada todavía.
-          </p>
+          <div className="rounded-lg border border-dashed border-[#003893]/30 bg-blue-50/60 px-3 py-2.5 text-xs text-slate-600">
+            <p className="font-semibold text-[#003893]">Todavía no hay una iglesia sembrada en {focusedNombre}.</p>
+            <p className="mt-1 text-slate-500">
+              ¿Y si Dios te está llamando a ser el primero? {focusedNombre} espera una iglesia que le anuncie a Cristo.
+            </p>
+          </div>
         )}
       </div>
 
