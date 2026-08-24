@@ -43,44 +43,27 @@ function initials(nombre: string) {
   );
 }
 
-function cornerBadge(content: string, borderColor: string, side: "left" | "right") {
-  return `<div style="position:absolute;bottom:2px;${side}:-8px;min-width:16px;height:16px;padding:0 2px;border-radius:9999px;background:#fff;border:2px solid ${borderColor};display:flex;align-items:center;justify-content:center;gap:1px;font-size:9px;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,0.35);">${content}</div>`;
-}
-
-function pinIcon(m: Pick<MunicipioPin, "nombre" | "banderaUrl">, iglesiaCount: number) {
-  const badge = m.banderaUrl
-    ? `<img src="${m.banderaUrl}" style="width:100%;height:100%;object-fit:cover;" />`
-    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#FCD116;color:#003893;font-weight:700;font-size:12px;">${initials(
-        m.nombre
-      )}</div>`;
-
-  // Hasta 2 iglesias: un ícono por cada esquina inferior. Con más de 2, la
-  // esquina derecha suma el conteo en vez de repetir el ícono.
-  let corners: string;
-  if (iglesiaCount === 0) {
-    corners = cornerBadge("😢", "#94a3b8", "right");
-  } else if (iglesiaCount === 1) {
-    corners = cornerBadge("⛪", "#047857", "right");
-  } else if (iglesiaCount === 2) {
-    corners = cornerBadge("⛪", "#047857", "left") + cornerBadge("⛪", "#047857", "right");
-  } else {
-    corners = cornerBadge("⛪", "#047857", "left") + cornerBadge(`⛪${iglesiaCount}`, "#047857", "right");
-  }
+// Pin de municipio: un ícono simple (iglesia o carita triste según tenga o
+// no iglesias registradas) con una burbuja de conteo si hay más de una.
+function municipioIcon(iglesiaCount: number) {
+  const emoji = iglesiaCount > 0 ? "⛪" : "😢";
+  const borderColor = iglesiaCount > 0 ? "#047857" : "#94a3b8";
+  const bubble =
+    iglesiaCount > 1
+      ? `<div style="position:absolute;bottom:-4px;right:-6px;min-width:16px;height:16px;padding:0 3px;border-radius:9999px;background:#CE1126;color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,0.4);">${iglesiaCount}</div>`
+      : "";
 
   return L.divIcon({
     className: "",
     html: `
-      <div style="position:relative;width:36px;height:46px;">
-        <div style="position:absolute;top:0;left:0;width:36px;height:36px;border-radius:50%;border:3px solid #CE1126;overflow:hidden;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,0.35);">
-          ${badge}
-        </div>
-        <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:11px solid #CE1126;"></div>
-        ${corners}
+      <div style="position:relative;width:34px;height:34px;">
+        <div style="width:34px;height:34px;border-radius:50%;background:#fff;border:2px solid ${borderColor};display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${emoji}</div>
+        ${bubble}
       </div>
     `,
-    iconSize: [36, 46],
-    iconAnchor: [18, 46],
-    popupAnchor: [0, -42],
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+    popupAnchor: [0, -20],
   });
 }
 
@@ -111,7 +94,7 @@ function bindPermanentTooltip(marker: L.Marker, content: string) {
   marker.bindTooltip(content, {
     permanent: true,
     direction: "top",
-    offset: [0, -38],
+    offset: [0, -28],
     opacity: 1,
   });
 }
@@ -127,10 +110,12 @@ export default function CundinamarcaMap({
   municipios,
   iglesias = [],
   focusedMunicipioId = null,
+  onFocusMunicipio,
 }: {
   municipios: MunicipioPin[];
   iglesias?: IglesiaPin[];
   focusedMunicipioId?: string | null;
+  onFocusMunicipio?: (id: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -139,8 +124,10 @@ export default function CundinamarcaMap({
   const municipioMarkersRef = useRef<L.Marker[]>([]);
   const iglesiaMarkersRef = useRef<L.Marker[]>([]);
   const router = useRouter();
+  const onFocusMunicipioRef = useRef(onFocusMunicipio);
+  onFocusMunicipioRef.current = onFocusMunicipio;
 
-  // Monta el mapa y la capa de municipios (con burbuja de cantidad de
+  // Monta el mapa y la capa de municipios (ícono + burbuja de cantidad de
   // iglesias) una sola vez.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -174,7 +161,7 @@ export default function CundinamarcaMap({
 
     municipios.forEach((m) => {
       const iglesiaCount = conteoPorMunicipio.get(m.nombre) ?? 0;
-      const marker = L.marker([m.lat, m.lng], { icon: pinIcon(m, iglesiaCount) }).addTo(municipiosLayer);
+      const marker = L.marker([m.lat, m.lng], { icon: municipioIcon(iglesiaCount) }).addTo(municipiosLayer);
       const habitantesTxt = m.habitantes ? `${m.habitantes.toLocaleString("es-CO")} hab.` : "Dato pendiente";
       bindPermanentTooltip(
         marker,
@@ -183,7 +170,9 @@ export default function CundinamarcaMap({
            <div style="font-size:10px;color:#64748b;">${habitantesTxt}</div>
          </div>`
       );
-      marker.on("click", () => router.push(`/municipios/${m.id}`));
+      // Clic en el "cluster" del municipio: acerca el mapa y muestra sus
+      // iglesias, igual que si se eligiera desde el selector.
+      marker.on("click", () => onFocusMunicipioRef.current?.(m.id));
       municipioMarkersRef.current.push(marker);
     });
 
@@ -205,8 +194,9 @@ export default function CundinamarcaMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reacciona al municipio enfocado desde el selector: acerca el mapa, oculta
-  // los pines de municipios y muestra los de las iglesias de ese municipio.
+  // Reacciona al municipio enfocado desde el selector (o el clic en un
+  // pin): acerca el mapa, oculta los pines de municipios y muestra los de
+  // las iglesias de ese municipio.
   useEffect(() => {
     const map = mapRef.current;
     const municipiosLayer = municipiosLayerRef.current;

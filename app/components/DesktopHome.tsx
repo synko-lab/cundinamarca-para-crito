@@ -49,7 +49,7 @@ export default function DesktopHome({
 
   return (
     <div className="relative">
-      <MapSection municipios={municipios} iglesias={iglesias} focusedMunicipioId={focusedId} />
+      <MapSection municipios={municipios} iglesias={iglesias} focusedMunicipioId={focusedId} onFocusMunicipio={setFocusedId} />
       <div className="pointer-events-none absolute inset-0 z-[1100] flex items-start p-4 sm:p-6">
         <div className="pointer-events-auto w-full max-w-xs">
           <HeroCard

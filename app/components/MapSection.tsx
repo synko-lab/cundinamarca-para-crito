@@ -16,16 +16,23 @@ export default function MapSection({
   municipios,
   iglesias,
   focusedMunicipioId,
+  onFocusMunicipio,
   className = "h-[520px] w-full sm:h-[680px]",
 }: {
   municipios: MunicipioPin[];
   iglesias?: IglesiaPin[];
   focusedMunicipioId?: string | null;
+  onFocusMunicipio?: (id: string) => void;
   className?: string;
 }) {
   return (
     <div className={`overflow-hidden rounded-2xl border border-slate-200 shadow-sm ${className}`}>
-      <CundinamarcaMap municipios={municipios} iglesias={iglesias} focusedMunicipioId={focusedMunicipioId} />
+      <CundinamarcaMap
+        municipios={municipios}
+        iglesias={iglesias}
+        focusedMunicipioId={focusedMunicipioId}
+        onFocusMunicipio={onFocusMunicipio}
+      />
     </div>
   );
 }

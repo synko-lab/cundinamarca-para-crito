@@ -85,7 +85,13 @@ export default function MobileHome({
             <p className="text-sm text-slate-400">Aún no hay municipios con coordenadas registradas.</p>
           </div>
         ) : (
-          <MapSection municipios={municipios} iglesias={iglesias} focusedMunicipioId={focusedId} className="h-full w-full" />
+          <MapSection
+            municipios={municipios}
+            iglesias={iglesias}
+            focusedMunicipioId={focusedId}
+            onFocusMunicipio={setFocusedId}
+            className="h-full w-full"
+          />
         )}
       </div>
 
