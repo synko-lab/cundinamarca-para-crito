@@ -21,6 +21,7 @@ export default function MobileHome({
 }) {
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const focusedNombre = focusedId ? municipiosOptions.find((m) => m.id === focusedId)?.nombre : null;
+  const iglesiasEnFoco = focusedNombre ? iglesias.filter((i) => i.municipio === focusedNombre).length : 0;
 
   return (
     <div className="flex h-[100dvh] flex-col sm:hidden">
@@ -57,12 +58,27 @@ export default function MobileHome({
         {focusedNombre && (
           <div className="flex items-center justify-between text-xs">
             <span className="text-slate-500">
-              Mostrando iglesias en <span className="font-semibold text-slate-700">{focusedNombre}</span>
+              {iglesiasEnFoco > 0 ? (
+                <>
+                  Mostrando iglesias en <span className="font-semibold text-slate-700">{focusedNombre}</span>
+                </>
+              ) : (
+                <>
+                  Sin iglesias en el mapa para <span className="font-semibold text-slate-700">{focusedNombre}</span>
+                </>
+              )}
             </span>
             <Link href={`/municipios/${focusedId}`} className="font-semibold text-[#003893] hover:underline">
               Ver perfil →
             </Link>
           </div>
+        )}
+
+        {focusedNombre && iglesiasEnFoco === 0 && (
+          <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-400">
+            Aún no hay iglesias con coordenadas registradas en {focusedNombre}. Puede que sí existan iglesias en el
+            directorio, solo que sin ubicación cargada todavía.
+          </p>
         )}
       </div>
 
