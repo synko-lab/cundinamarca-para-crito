@@ -28,8 +28,13 @@ const CUNDINAMARCA_CENTER: [number, number] = [4.85, -74.2];
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 15;
 const FOCUS_ZOOM = 12;
+// Vista general (sin municipio enfocado): por debajo de este zoom se ven
+// solo los puntos rojos de iglesias; de aquí en adelante aparecen los
+// pines de municipios y los puntos se ocultan.
+const MUNICIPIO_MIN_ZOOM = 10;
 // Con el mapa muy alejado (~70 municipios a la vez) las etiquetas permanentes
-// se amontonan y se vuelven ilegibles. Se ocultan hasta este nivel de zoom.
+// se amontonan y se vuelven ilegibles. Se ocultan hasta este nivel de zoom
+// (se conserva igual, independiente de cuándo aparecen los pines).
 const TOOLTIP_MIN_ZOOM = 11;
 
 function initials(nombre: string) {
@@ -89,6 +94,15 @@ function iglesiaPinIcon(i: Pick<IglesiaPin, "nombre" | "logoUrl">) {
   });
 }
 
+function dotIcon() {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:10px;height:10px;border-radius:50%;background:#CE1126;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.45);"></div>`,
+    iconSize: [10, 10],
+    iconAnchor: [5, 5],
+  });
+}
+
 function bindPermanentTooltip(marker: L.Marker, content: string) {
   marker.bindTooltip(content, {
     permanent: true,
@@ -118,11 +132,14 @@ export default function CundinamarcaMap({
   const mapRef = useRef<L.Map | null>(null);
   const municipiosLayerRef = useRef<L.LayerGroup | null>(null);
   const iglesiasLayerRef = useRef<L.LayerGroup | null>(null);
+  const iglesiasOverviewLayerRef = useRef<L.LayerGroup | null>(null);
   const municipioMarkersRef = useRef<L.Marker[]>([]);
   const iglesiaMarkersRef = useRef<L.Marker[]>([]);
+  const focusedRef = useRef(false);
   const router = useRouter();
 
-  // Monta el mapa y la capa de municipios una sola vez.
+  // Monta el mapa, la capa de municipios y la capa general de puntos de
+  // iglesias (todas, para la vista sin enfoque) una sola vez.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -144,9 +161,11 @@ export default function CundinamarcaMap({
       maxZoom: MAX_ZOOM,
     }).addTo(map);
 
-    const municipiosLayer = L.layerGroup().addTo(map);
+    const municipiosLayer = L.layerGroup();
     municipiosLayerRef.current = municipiosLayer;
     iglesiasLayerRef.current = L.layerGroup();
+    const iglesiasOverviewLayer = L.layerGroup().addTo(map);
+    iglesiasOverviewLayerRef.current = iglesiasOverviewLayer;
 
     municipios.forEach((m) => {
       const marker = L.marker([m.lat, m.lng], { icon: pinIcon(m) }).addTo(municipiosLayer);
@@ -162,18 +181,36 @@ export default function CundinamarcaMap({
       municipioMarkersRef.current.push(marker);
     });
 
-    applyTooltipVisibility(municipioMarkersRef.current, map.getZoom());
-    map.on("zoomend", () => {
+    iglesias.forEach((ig) => {
+      const marker = L.marker([ig.lat, ig.lng], { icon: dotIcon() }).addTo(iglesiasOverviewLayer);
+      marker.on("click", () => router.push(`/iglesias/${ig.id}`));
+    });
+
+    function syncLayers() {
       const zoom = map.getZoom();
       applyTooltipVisibility(municipioMarkersRef.current, zoom);
       applyTooltipVisibility(iglesiaMarkersRef.current, zoom);
-    });
+
+      if (focusedRef.current) return;
+
+      if (zoom >= MUNICIPIO_MIN_ZOOM) {
+        if (!map.hasLayer(municipiosLayer)) map.addLayer(municipiosLayer);
+        if (map.hasLayer(iglesiasOverviewLayer)) map.removeLayer(iglesiasOverviewLayer);
+      } else {
+        if (map.hasLayer(municipiosLayer)) map.removeLayer(municipiosLayer);
+        if (!map.hasLayer(iglesiasOverviewLayer)) map.addLayer(iglesiasOverviewLayer);
+      }
+    }
+
+    syncLayers();
+    map.on("zoomend", syncLayers);
 
     return () => {
       map.remove();
       mapRef.current = null;
       municipiosLayerRef.current = null;
       iglesiasLayerRef.current = null;
+      iglesiasOverviewLayerRef.current = null;
       municipioMarkersRef.current = [];
       iglesiaMarkersRef.current = [];
     };
@@ -181,18 +218,19 @@ export default function CundinamarcaMap({
   }, []);
 
   // Reacciona al municipio enfocado desde el selector: acerca el mapa, oculta
-  // los pines de municipios y muestra los de las iglesias de ese municipio.
+  // municipios y puntos generales, y muestra las iglesias de ese municipio.
   useEffect(() => {
     const map = mapRef.current;
     const municipiosLayer = municipiosLayerRef.current;
     const iglesiasLayer = iglesiasLayerRef.current;
-    if (!map || !municipiosLayer || !iglesiasLayer) return;
+    const iglesiasOverviewLayer = iglesiasOverviewLayerRef.current;
+    if (!map || !municipiosLayer || !iglesiasLayer || !iglesiasOverviewLayer) return;
 
     iglesiasLayer.clearLayers();
     iglesiaMarkersRef.current = [];
+    focusedRef.current = Boolean(focusedMunicipioId);
 
     if (!focusedMunicipioId) {
-      if (!map.hasLayer(municipiosLayer)) map.addLayer(municipiosLayer);
       if (map.hasLayer(iglesiasLayer)) map.removeLayer(iglesiasLayer);
       map.flyTo(CUNDINAMARCA_CENTER, 9);
       return;
@@ -202,6 +240,7 @@ export default function CundinamarcaMap({
     if (!municipio) return;
 
     if (map.hasLayer(municipiosLayer)) map.removeLayer(municipiosLayer);
+    if (map.hasLayer(iglesiasOverviewLayer)) map.removeLayer(iglesiasOverviewLayer);
 
     const iglesiasDelMunicipio = iglesias.filter((i) => i.municipio === municipio.nombre);
 
