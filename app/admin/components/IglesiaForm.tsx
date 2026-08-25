@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { MUNICIPIOS } from "../../../lib/municipios";
 import { type Imagen } from "../../iglesias/[id]/components/IglesiaHero";
 import { uploadImageClient } from "../../../src/lib/storageClient";
 import {
@@ -63,6 +62,22 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
 
   const [images, setImages] = useState<Imagen[]>([]);
   const activeId = editId || createdId;
+
+  const [municipiosOptions, setMunicipiosOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("/api/municipios")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.success) return;
+        const nombres: string[] = (data.items || [])
+          .map((it: any) => it.nombre)
+          .filter((n: unknown): n is string => typeof n === "string" && n.trim().length > 0)
+          .sort((a: string, b: string) => a.localeCompare(b, "es"));
+        setMunicipiosOptions(nombres);
+      })
+      .catch((err) => console.error("Error cargando municipios:", err));
+  }, []);
 
   // Imágenes "en espera": no se suben hasta pulsar Guardar en la pestaña final.
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -528,9 +543,9 @@ export default function IglesiaForm({ editId }: { editId?: string }) {
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition focus:border-emerald-600 focus:outline-none focus:ring-4 focus:ring-emerald-600/10"
               >
                 <option value="">-- Seleccione municipio --</option>
-                {MUNICIPIOS.map((m) => (
-                  <option key={m.nombre} value={m.nombre}>
-                    {m.nombre}
+                {municipiosOptions.map((nombre) => (
+                  <option key={nombre} value={nombre}>
+                    {nombre}
                   </option>
                 ))}
               </select>
