@@ -28,9 +28,9 @@ const CUNDINAMARCA_CENTER: [number, number] = [4.85, -74.2];
 const MIN_ZOOM = 8;
 const MAX_ZOOM = 15;
 const FOCUS_ZOOM = 12;
-// Frontera entre las dos vistas cuando no hay municipio enfocado: por debajo
-// se ven los "clusters" de municipio; de aquí en adelante se ocultan y
-// aparecen los pines individuales de cada iglesia.
+// Las iglesias de un municipio solo se muestran cuando se cumplen las DOS
+// condiciones a la vez: hay un municipio activo Y el zoom llegó a este
+// nivel. Si falta cualquiera de las dos, se ven los clusters de municipio.
 const IGLESIA_ZOOM_THRESHOLD = 12;
 // Con el mapa muy alejado (~70 municipios a la vez) las etiquetas permanentes
 // se amontonan y se vuelven ilegibles. Se ocultan hasta este nivel de zoom.
@@ -119,6 +119,13 @@ function iglesiaTooltipHtml(ig: Pick<IglesiaPin, "nombre" | "pastor">) {
     </div>`;
 }
 
+// Las iglesias de un municipio solo se ven si HAY municipio activo Y el
+// zoom alcanzó el umbral (ambas condiciones a la vez). Mostrar los
+// clusters de municipio es exactamente la condición contraria.
+function shouldShowIglesias(focusedId: string | null, zoom: number) {
+  return Boolean(focusedId) && zoom >= IGLESIA_ZOOM_THRESHOLD;
+}
+
 export default function CundinamarcaMap({
   municipios,
   iglesias = [],
@@ -133,19 +140,16 @@ export default function CundinamarcaMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const municipiosLayerRef = useRef<L.LayerGroup | null>(null);
-  const iglesiasAllLayerRef = useRef<L.LayerGroup | null>(null);
   const iglesiasFocusLayerRef = useRef<L.LayerGroup | null>(null);
   const municipioMarkersRef = useRef<L.Marker[]>([]);
-  const iglesiaAllMarkersRef = useRef<L.Marker[]>([]);
   const iglesiaFocusMarkersRef = useRef<L.Marker[]>([]);
-  const focusedRef = useRef(false);
-  const prevFocusedIdRef = useRef<string | null>(null);
+  const focusedIdRef = useRef<string | null>(null);
+  const syncVisibilityRef = useRef<() => void>(() => {});
   const router = useRouter();
   const onFocusMunicipioRef = useRef(onFocusMunicipio);
   onFocusMunicipioRef.current = onFocusMunicipio;
 
-  // Monta el mapa y las capas de municipios (clusters) e iglesias
-  // individuales (todas) una sola vez.
+  // Monta el mapa y la capa de municipios (clusters) una sola vez.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -169,9 +173,8 @@ export default function CundinamarcaMap({
 
     const municipiosLayer = L.layerGroup().addTo(map);
     municipiosLayerRef.current = municipiosLayer;
-    const iglesiasAllLayer = L.layerGroup();
-    iglesiasAllLayerRef.current = iglesiasAllLayer;
-    iglesiasFocusLayerRef.current = L.layerGroup();
+    const iglesiasFocusLayer = L.layerGroup();
+    iglesiasFocusLayerRef.current = iglesiasFocusLayer;
 
     const conteoPorMunicipio = new Map<string, number>();
     iglesias.forEach((ig) => {
@@ -189,89 +192,70 @@ export default function CundinamarcaMap({
            <div style="font-size:10px;color:#64748b;">${habitantesTxt}</div>
          </div>`
       );
-      // Clic en el "cluster" del municipio: acerca el mapa y muestra sus
-      // iglesias, igual que si se eligiera desde el selector.
+      // Clic en el "cluster" del municipio: lo enfoca (igual que elegirlo
+      // desde el selector) y acerca el mapa hacia él.
       marker.on("click", () => onFocusMunicipioRef.current?.(m.id));
       municipioMarkersRef.current.push(marker);
     });
 
-    iglesias.forEach((ig) => {
-      const marker = L.marker([ig.lat, ig.lng], { icon: iglesiaPinIcon(ig) }).addTo(iglesiasAllLayer);
-      bindPermanentTooltip(marker, iglesiaTooltipHtml(ig));
-      marker.on("click", () => router.push(`/iglesias/${ig.id}`));
-      iglesiaAllMarkersRef.current.push(marker);
-    });
-
-    function syncLayers() {
+    function syncVisibility() {
       const zoom = map.getZoom();
+      const showIglesias = shouldShowIglesias(focusedIdRef.current, zoom);
 
-      // Leaflet reabre automáticamente los tooltips "permanent" apenas su capa
-      // se añade al mapa, así que las capas deben resolverse ANTES de aplicar
-      // la visibilidad de tooltips.
-      if (!focusedRef.current) {
-        if (zoom >= IGLESIA_ZOOM_THRESHOLD) {
-          if (!map.hasLayer(iglesiasAllLayer)) map.addLayer(iglesiasAllLayer);
-          if (map.hasLayer(municipiosLayer)) map.removeLayer(municipiosLayer);
-        } else {
-          if (!map.hasLayer(municipiosLayer)) map.addLayer(municipiosLayer);
-          if (map.hasLayer(iglesiasAllLayer)) map.removeLayer(iglesiasAllLayer);
-        }
+      // Leaflet reabre automáticamente los tooltips "permanent" apenas su
+      // capa se añade al mapa, así que las capas deben resolverse ANTES de
+      // aplicar la visibilidad de tooltips.
+      if (showIglesias) {
+        if (!map.hasLayer(iglesiasFocusLayer)) map.addLayer(iglesiasFocusLayer);
+        if (map.hasLayer(municipiosLayer)) map.removeLayer(municipiosLayer);
+      } else {
+        if (map.hasLayer(iglesiasFocusLayer)) map.removeLayer(iglesiasFocusLayer);
+        if (!map.hasLayer(municipiosLayer)) map.addLayer(municipiosLayer);
       }
 
       applyTooltipVisibility(municipioMarkersRef.current, zoom);
-      applyTooltipVisibility(iglesiaAllMarkersRef.current, zoom);
       applyTooltipVisibility(iglesiaFocusMarkersRef.current, zoom);
     }
 
-    syncLayers();
-    map.on("zoomend", syncLayers);
+    syncVisibilityRef.current = syncVisibility;
+    syncVisibility();
+    map.on("zoomend", syncVisibility);
 
     return () => {
       map.remove();
       mapRef.current = null;
       municipiosLayerRef.current = null;
-      iglesiasAllLayerRef.current = null;
       iglesiasFocusLayerRef.current = null;
       municipioMarkersRef.current = [];
-      iglesiaAllMarkersRef.current = [];
       iglesiaFocusMarkersRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Reacciona al municipio enfocado desde el selector (o el clic en un
-  // cluster): acerca el mapa, oculta municipios e iglesias generales, y
-  // muestra solo las iglesias de ese municipio.
+  // cluster): reconstruye los pines de sus iglesias, acerca/aleja el mapa,
+  // y reevalúa de inmediato qué capa corresponde mostrar.
   useEffect(() => {
     const map = mapRef.current;
-    const municipiosLayer = municipiosLayerRef.current;
-    const iglesiasAllLayer = iglesiasAllLayerRef.current;
     const iglesiasFocusLayer = iglesiasFocusLayerRef.current;
-    if (!map || !municipiosLayer || !iglesiasAllLayer || !iglesiasFocusLayer) return;
+    if (!map || !iglesiasFocusLayer) return;
+
+    const previousId = focusedIdRef.current;
+    focusedIdRef.current = focusedMunicipioId;
 
     iglesiasFocusLayer.clearLayers();
     iglesiaFocusMarkersRef.current = [];
-    focusedRef.current = Boolean(focusedMunicipioId);
-    const veniaEnfocado = prevFocusedIdRef.current !== null;
-    prevFocusedIdRef.current = focusedMunicipioId;
 
     if (!focusedMunicipioId) {
-      if (map.hasLayer(iglesiasFocusLayer)) map.removeLayer(iglesiasFocusLayer);
-      // Solo recentra al salir de un municipio enfocado, no en cada
-      // re-ejecución de este efecto mientras ya se está sin enfoque
-      // (evita resetear un zoom manual que el usuario haya hecho).
-      if (veniaEnfocado) map.flyTo(CUNDINAMARCA_CENTER, 9);
+      if (previousId) map.flyTo(CUNDINAMARCA_CENTER, 9);
+      syncVisibilityRef.current();
       return;
     }
 
     const municipio = municipios.find((m) => m.id === focusedMunicipioId);
     if (!municipio) return;
 
-    if (map.hasLayer(municipiosLayer)) map.removeLayer(municipiosLayer);
-    if (map.hasLayer(iglesiasAllLayer)) map.removeLayer(iglesiasAllLayer);
-
     const iglesiasDelMunicipio = iglesias.filter((i) => i.municipio === municipio.nombre);
-
     iglesiasDelMunicipio.forEach((ig) => {
       const marker = L.marker([ig.lat, ig.lng], { icon: iglesiaPinIcon(ig) }).addTo(iglesiasFocusLayer);
       bindPermanentTooltip(marker, iglesiaTooltipHtml(ig));
@@ -279,9 +263,8 @@ export default function CundinamarcaMap({
       iglesiaFocusMarkersRef.current.push(marker);
     });
 
-    if (!map.hasLayer(iglesiasFocusLayer)) map.addLayer(iglesiasFocusLayer);
-    applyTooltipVisibility(iglesiaFocusMarkersRef.current, FOCUS_ZOOM);
     map.flyTo([municipio.lat, municipio.lng], FOCUS_ZOOM);
+    (map as any)._syncVisibility?.();
   }, [focusedMunicipioId, municipios, iglesias, router]);
 
   return <div ref={containerRef} className="h-full w-full" />;
