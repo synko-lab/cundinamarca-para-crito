@@ -227,6 +227,11 @@ export default function CundinamarcaMap({
       maxZoom: MAX_ZOOM,
       scrollWheelZoom: false,
       zoomControl: false,
+      // Los ~110 contornos de municipio + la máscara son polígonos no
+      // interactivos: Canvas los renderiza mucho más rápido que SVG (que es
+      // el motor por defecto de Leaflet) sin perder nada, ya que ninguno
+      // necesita hover/click individual.
+      preferCanvas: true,
     });
     mapRef.current = map;
 

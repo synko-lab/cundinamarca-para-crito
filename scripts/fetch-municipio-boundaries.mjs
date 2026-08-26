@@ -9,6 +9,7 @@ import { cert, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
+import { simplifyGeometry, EPSILON_MUNICIPIO } from "./lib/simplify.mjs";
 
 const app = initializeApp({
   credential: cert({
@@ -57,7 +58,7 @@ async function main() {
     try {
       const geometry = await fetchBoundary(nombre);
       if (geometry) {
-        result[nombre] = geometry;
+        result[nombre] = simplifyGeometry(geometry, EPSILON_MUNICIPIO);
         ok++;
         console.log(`  ✓ ${nombre}`);
       } else {
