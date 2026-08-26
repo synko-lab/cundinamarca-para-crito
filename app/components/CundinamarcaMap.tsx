@@ -138,6 +138,25 @@ const BOUNDARY_STYLE_HIGHLIGHT: L.PathOptions = {
   fillOpacity: 0.08,
 };
 
+const WORLD_RING: L.LatLngExpression[] = [
+  [-90, -180],
+  [-90, 180],
+  [90, 180],
+  [90, -180],
+];
+
+// Anillos exteriores (lat/lng) de un Polygon o MultiPolygon de Cundinamarca,
+// para usarlos como "agujeros" de la máscara que oscurece el resto del mapa.
+function extractOuterRings(geometry: GeoJSON.Geometry): L.LatLngExpression[][] {
+  if (geometry.type === "Polygon") {
+    return [geometry.coordinates[0].map(([lng, lat]) => [lat, lng] as L.LatLngExpression)];
+  }
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.map((poly) => poly[0].map(([lng, lat]) => [lat, lng] as L.LatLngExpression));
+  }
+  return [];
+}
+
 export default function CundinamarcaMap({
   municipios,
   iglesias = [],
@@ -176,6 +195,7 @@ export default function CundinamarcaMap({
       maxZoom: MAX_ZOOM,
       scrollWheelZoom: false,
       zoomControl: false,
+      maxBoundsViscosity: 1.0,
     });
     mapRef.current = map;
 
@@ -186,6 +206,28 @@ export default function CundinamarcaMap({
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
     }).addTo(map);
+
+    // Contorno del departamento: precalculado por
+    // scripts/fetch-cundinamarca-boundary.mjs. Oscurece todo lo que quede
+    // fuera de Cundinamarca y limita el paneo a esa zona.
+    fetch("/data/cundinamarca-boundary.json")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((geometry: GeoJSON.Geometry | null) => {
+        if (!geometry || !mapRef.current) return;
+        const rings = extractOuterRings(geometry);
+        if (rings.length === 0) return;
+
+        L.polygon([WORLD_RING, ...rings], {
+          stroke: false,
+          fillColor: "#0f172a",
+          fillOpacity: 0.55,
+          interactive: false,
+        }).addTo(mapRef.current);
+
+        const bounds = L.geoJSON(geometry as any).getBounds();
+        mapRef.current.setMaxBounds(bounds.pad(0.05));
+      })
+      .catch((err) => console.error("Error cargando contorno de Cundinamarca:", err));
 
     // Contornos de todos los municipios: precalculados por
     // scripts/fetch-municipio-boundaries.mjs y servidos como estático, para
