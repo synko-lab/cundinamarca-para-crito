@@ -126,20 +126,17 @@ function shouldShowIglesias(focusedId: string | null, zoom: number) {
   return Boolean(focusedId) && zoom >= IGLESIA_ZOOM_THRESHOLD;
 }
 
-// Color distintivo para el contorno del municipio enfocado (no se usa en
-// ningún otro elemento del mapa, para que resalte claramente).
+// Color distintivo para los contornos de municipio (no se usa en ningún
+// otro elemento del mapa, para que resalten claramente sobre las teselas).
 const BOUNDARY_COLOR = "#9333ea";
-
-async function fetchMunicipioBoundary(nombre: string): Promise<GeoJSON.GeoJsonObject | null> {
-  const url = `https://nominatim.openstreetmap.org/search?format=geojson&polygon_geojson=1&limit=1&countrycodes=co&q=${encodeURIComponent(
-    `${nombre}, Cundinamarca, Colombia`
-  )}`;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const data = await res.json();
-  const feature = data?.features?.[0];
-  return feature ?? null;
-}
+const BOUNDARY_STYLE_DEFAULT: L.PathOptions = { color: BOUNDARY_COLOR, weight: 1, opacity: 0.5, fill: false };
+const BOUNDARY_STYLE_HIGHLIGHT: L.PathOptions = {
+  color: BOUNDARY_COLOR,
+  weight: 3,
+  opacity: 1,
+  fill: true,
+  fillOpacity: 0.08,
+};
 
 export default function CundinamarcaMap({
   municipios,
@@ -160,14 +157,15 @@ export default function CundinamarcaMap({
   const iglesiaFocusMarkersRef = useRef<L.Marker[]>([]);
   const focusedIdRef = useRef<string | null>(null);
   const syncVisibilityRef = useRef<() => void>(() => {});
-  const boundaryLayerRef = useRef<L.GeoJSON | null>(null);
-  const boundaryCacheRef = useRef<Map<string, GeoJSON.GeoJsonObject>>(new Map());
-  const boundaryRequestIdRef = useRef(0);
+  const boundaryLayersByNameRef = useRef<Map<string, L.Path>>(new Map());
+  const highlightedBoundaryRef = useRef<L.Path | null>(null);
+  const applyHighlightRef = useRef<() => void>(() => {});
   const router = useRouter();
   const onFocusMunicipioRef = useRef(onFocusMunicipio);
   onFocusMunicipioRef.current = onFocusMunicipio;
 
-  // Monta el mapa y la capa de municipios (clusters) una sola vez.
+  // Monta el mapa, la capa de municipios (clusters) y los contornos de
+  // todos los municipios (siempre visibles, en segundo plano) una sola vez.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
@@ -188,6 +186,50 @@ export default function CundinamarcaMap({
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
     }).addTo(map);
+
+    // Contornos de todos los municipios: precalculados por
+    // scripts/fetch-municipio-boundaries.mjs y servidos como estático, para
+    // no pedirle 70 polígonos a Nominatim en cada visita.
+    function applyHighlight() {
+      if (highlightedBoundaryRef.current) {
+        highlightedBoundaryRef.current.setStyle(BOUNDARY_STYLE_DEFAULT);
+        highlightedBoundaryRef.current = null;
+      }
+      const id = focusedIdRef.current;
+      if (!id) return;
+      const municipio = municipios.find((m) => m.id === id);
+      if (!municipio) return;
+      const layer = boundaryLayersByNameRef.current.get(municipio.nombre);
+      if (layer) {
+        layer.setStyle(BOUNDARY_STYLE_HIGHLIGHT);
+        layer.bringToFront();
+        highlightedBoundaryRef.current = layer;
+      }
+    }
+    applyHighlightRef.current = applyHighlight;
+
+    fetch("/data/municipio-boundaries.json")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: Record<string, GeoJSON.Geometry> | null) => {
+        if (!data || !mapRef.current) return;
+        const featureCollection = {
+          type: "FeatureCollection" as const,
+          features: Object.entries(data).map(([nombre, geometry]) => ({
+            type: "Feature" as const,
+            properties: { nombre },
+            geometry,
+          })),
+        };
+        L.geoJSON(featureCollection as any, {
+          style: () => BOUNDARY_STYLE_DEFAULT,
+          interactive: false,
+          onEachFeature: (feature, layer) => {
+            boundaryLayersByNameRef.current.set(feature.properties.nombre, layer as L.Path);
+          },
+        }).addTo(mapRef.current);
+        applyHighlightRef.current();
+      })
+      .catch((err) => console.error("Error cargando contornos de municipios:", err));
 
     const municipiosLayer = L.layerGroup().addTo(map);
     municipiosLayerRef.current = municipiosLayer;
@@ -246,14 +288,15 @@ export default function CundinamarcaMap({
       iglesiasFocusLayerRef.current = null;
       municipioMarkersRef.current = [];
       iglesiaFocusMarkersRef.current = [];
-      boundaryLayerRef.current = null;
+      boundaryLayersByNameRef.current = new Map();
+      highlightedBoundaryRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Reacciona al municipio enfocado desde el selector (o el clic en un
   // cluster): reconstruye los pines de sus iglesias, acerca/aleja el mapa,
-  // y reevalúa de inmediato qué capa corresponde mostrar.
+  // resalta su contorno y reevalúa qué capa corresponde mostrar.
   useEffect(() => {
     const map = mapRef.current;
     const iglesiasFocusLayer = iglesiasFocusLayerRef.current;
@@ -264,11 +307,7 @@ export default function CundinamarcaMap({
 
     iglesiasFocusLayer.clearLayers();
     iglesiaFocusMarkersRef.current = [];
-
-    if (boundaryLayerRef.current) {
-      map.removeLayer(boundaryLayerRef.current);
-      boundaryLayerRef.current = null;
-    }
+    applyHighlightRef.current();
 
     if (!focusedMunicipioId) {
       if (previousId) map.flyTo(CUNDINAMARCA_CENTER, 9);
@@ -289,32 +328,6 @@ export default function CundinamarcaMap({
 
     map.flyTo([municipio.lat, municipio.lng], FOCUS_ZOOM);
     syncVisibilityRef.current();
-
-    // Dibuja el contorno real del municipio (polígono de OpenStreetMap) en
-    // un color distintivo. Se cachea por nombre para no repetir la
-    // consulta si se vuelve a enfocar el mismo municipio.
-    const requestId = ++boundaryRequestIdRef.current;
-    const cached = boundaryCacheRef.current.get(municipio.nombre);
-    const drawBoundary = (geojson: GeoJSON.GeoJsonObject) => {
-      if (boundaryRequestIdRef.current !== requestId || !mapRef.current) return;
-      const layer = L.geoJSON(geojson, {
-        style: { color: BOUNDARY_COLOR, weight: 3, fill: true, fillOpacity: 0.06, dashArray: "6 4" },
-        interactive: false,
-      }).addTo(mapRef.current);
-      boundaryLayerRef.current = layer;
-    };
-
-    if (cached) {
-      drawBoundary(cached);
-    } else {
-      fetchMunicipioBoundary(municipio.nombre)
-        .then((geojson) => {
-          if (!geojson) return;
-          boundaryCacheRef.current.set(municipio.nombre, geojson);
-          drawBoundary(geojson);
-        })
-        .catch((err) => console.error("Error cargando contorno del municipio:", err));
-    }
   }, [focusedMunicipioId, municipios, iglesias, router]);
 
   return <div ref={containerRef} className="h-full w-full" />;
