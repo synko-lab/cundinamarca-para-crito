@@ -34,6 +34,12 @@ async function fetchBoundary(nombre) {
   const data = await res.json();
   const feature = data?.features?.[0];
   if (!feature || !feature.geometry) return null;
+  // Algunos resultados de Nominatim son un nodo/punto (p. ej. si no hay
+  // relación de límite administrativo cargada en OSM para ese municipio),
+  // no un polígono. Un Point renderizado por L.geoJSON cae al marcador por
+  // defecto de Leaflet (ícono roto, sin bundlear en Next.js), así que se
+  // descarta como "sin resultado" en vez de guardarlo.
+  if (feature.geometry.type !== "Polygon" && feature.geometry.type !== "MultiPolygon") return null;
   return feature.geometry;
 }
 

@@ -126,35 +126,66 @@ function shouldShowIglesias(focusedId: string | null, zoom: number) {
   return Boolean(focusedId) && zoom >= IGLESIA_ZOOM_THRESHOLD;
 }
 
-// Color distintivo para los contornos de municipio (no se usa en ningún
-// otro elemento del mapa, para que resalten claramente sobre las teselas).
-const BOUNDARY_COLOR = "#9333ea";
-const BOUNDARY_STYLE_DEFAULT: L.PathOptions = { color: BOUNDARY_COLOR, weight: 1, opacity: 0.5, fill: false };
-const BOUNDARY_STYLE_HIGHLIGHT: L.PathOptions = {
-  color: BOUNDARY_COLOR,
-  weight: 3,
-  opacity: 1,
-  fill: true,
-  fillOpacity: 0.08,
-};
-
-const WORLD_RING: L.LatLngExpression[] = [
-  [-90, -180],
-  [-90, 180],
-  [90, 180],
-  [90, -180],
+// Paleta de colores distintos para los contornos de municipio (se asigna
+// uno por municipio, cíclico) — ninguno coincide con los colores ya usados
+// en pines/burbujas del mapa.
+const BOUNDARY_PALETTE = [
+  "#e11d48",
+  "#f97316",
+  "#eab308",
+  "#84cc16",
+  "#10b981",
+  "#06b6d4",
+  "#3b82f6",
+  "#8b5cf6",
+  "#d946ef",
+  "#f43f5e",
+  "#0ea5e9",
+  "#22c55e",
 ];
+
+function boundaryStyleDefault(color: string): L.PathOptions {
+  return { color, weight: 2.5, opacity: 0.75, fill: false };
+}
+function boundaryStyleHighlight(color: string): L.PathOptions {
+  return { color, weight: 5, opacity: 1, fill: true, fillOpacity: 0.12 };
+}
+
+// Rectángulo que cubre "todo el mundo" para la máscara. Se usa ±85° de
+// latitud (no ±90): la proyección Web Mercator que usa Leaflet no puede
+// representar los polos exactos y falla al construir el polígono con ellos.
+const WORLD_RING: L.LatLngExpression[] = [
+  [-85, -180],
+  [-85, 180],
+  [85, 180],
+  [85, -180],
+];
+
+function signedArea(ring: L.LatLngExpression[]): number {
+  let sum = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i] as [number, number];
+    const b = ring[(i + 1) % ring.length] as [number, number];
+    sum += a[0] * b[1] - b[0] * a[1];
+  }
+  return sum;
+}
 
 // Anillos exteriores (lat/lng) de un Polygon o MultiPolygon de Cundinamarca,
 // para usarlos como "agujeros" de la máscara que oscurece el resto del mapa.
+// Se fuerza a que cada anillo tenga el sentido de giro opuesto al del
+// rectángulo exterior: si coinciden, el hueco no se recorta (SVG usa la
+// regla "nonzero" por defecto) y la máscara termina cubriendo todo.
 function extractOuterRings(geometry: GeoJSON.Geometry): L.LatLngExpression[][] {
+  let rawRings: L.LatLngExpression[][] = [];
   if (geometry.type === "Polygon") {
-    return [geometry.coordinates[0].map(([lng, lat]) => [lat, lng] as L.LatLngExpression)];
+    rawRings = [geometry.coordinates[0].map(([lng, lat]) => [lat, lng] as L.LatLngExpression)];
+  } else if (geometry.type === "MultiPolygon") {
+    rawRings = geometry.coordinates.map((poly) => poly[0].map(([lng, lat]) => [lat, lng] as L.LatLngExpression));
   }
-  if (geometry.type === "MultiPolygon") {
-    return geometry.coordinates.map((poly) => poly[0].map(([lng, lat]) => [lat, lng] as L.LatLngExpression));
-  }
-  return [];
+
+  const outerSign = Math.sign(signedArea(WORLD_RING));
+  return rawRings.map((ring) => (Math.sign(signedArea(ring)) === outerSign ? [...ring].reverse() : ring));
 }
 
 export default function CundinamarcaMap({
@@ -177,6 +208,7 @@ export default function CundinamarcaMap({
   const focusedIdRef = useRef<string | null>(null);
   const syncVisibilityRef = useRef<() => void>(() => {});
   const boundaryLayersByNameRef = useRef<Map<string, L.Path>>(new Map());
+  const boundaryColorByNameRef = useRef<Map<string, string>>(new Map());
   const highlightedBoundaryRef = useRef<L.Path | null>(null);
   const applyHighlightRef = useRef<() => void>(() => {});
   const router = useRouter();
@@ -234,7 +266,8 @@ export default function CundinamarcaMap({
     // no pedirle 70 polígonos a Nominatim en cada visita.
     function applyHighlight() {
       if (highlightedBoundaryRef.current) {
-        highlightedBoundaryRef.current.setStyle(BOUNDARY_STYLE_DEFAULT);
+        const prevColor = boundaryColorByNameRef.current.get((highlightedBoundaryRef.current as any).__nombre) ?? BOUNDARY_PALETTE[0];
+        highlightedBoundaryRef.current.setStyle(boundaryStyleDefault(prevColor));
         highlightedBoundaryRef.current = null;
       }
       const id = focusedIdRef.current;
@@ -242,8 +275,9 @@ export default function CundinamarcaMap({
       const municipio = municipios.find((m) => m.id === id);
       if (!municipio) return;
       const layer = boundaryLayersByNameRef.current.get(municipio.nombre);
+      const color = boundaryColorByNameRef.current.get(municipio.nombre) ?? BOUNDARY_PALETTE[0];
       if (layer) {
-        layer.setStyle(BOUNDARY_STYLE_HIGHLIGHT);
+        layer.setStyle(boundaryStyleHighlight(color));
         layer.bringToFront();
         highlightedBoundaryRef.current = layer;
       }
@@ -254,19 +288,27 @@ export default function CundinamarcaMap({
       .then((res) => (res.ok ? res.json() : null))
       .then((data: Record<string, GeoJSON.Geometry> | null) => {
         if (!data || !mapRef.current) return;
+        const entries = Object.entries(data).filter(
+          ([, geometry]) => geometry.type === "Polygon" || geometry.type === "MultiPolygon"
+        );
         const featureCollection = {
           type: "FeatureCollection" as const,
-          features: Object.entries(data).map(([nombre, geometry]) => ({
+          features: entries.map(([nombre, geometry], i) => ({
             type: "Feature" as const,
-            properties: { nombre },
+            properties: { nombre, color: BOUNDARY_PALETTE[i % BOUNDARY_PALETTE.length] },
             geometry,
           })),
         };
         L.geoJSON(featureCollection as any, {
-          style: () => BOUNDARY_STYLE_DEFAULT,
+          style: (feature: any) => boundaryStyleDefault(feature.properties.color),
+          // Blindaje: si alguna geometría no fuera Polygon/MultiPolygon, no
+          // se dibuja como marcador por defecto de Leaflet (ícono roto).
+          pointToLayer: () => null as any,
           interactive: false,
           onEachFeature: (feature, layer) => {
             boundaryLayersByNameRef.current.set(feature.properties.nombre, layer as L.Path);
+            boundaryColorByNameRef.current.set(feature.properties.nombre, feature.properties.color);
+            (layer as any).__nombre = feature.properties.nombre;
           },
         }).addTo(mapRef.current);
         applyHighlightRef.current();
