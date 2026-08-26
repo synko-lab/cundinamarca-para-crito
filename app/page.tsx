@@ -1,9 +1,13 @@
 import { adminDb } from "@/lib/firebase-admin";
-import MobileHome from "./components/MobileHome";
-import DesktopHome from "./components/DesktopHome";
+import ResponsiveHome from "./components/ResponsiveHome";
 import type { MunicipioPin, IglesiaPin } from "./components/CundinamarcaMap";
 
-export const dynamic = "force-dynamic";
+// Los municipios de Cundinamarca son un dato geográfico fijo (116, siempre)
+// y las iglesias solo cambian cuando el admin registra/edita/borra una: no
+// tiene sentido refrescar por tiempo. La página queda cacheada
+// indefinidamente y las rutas de mutación en app/api/iglesias y
+// app/api/municipios la invalidan on-demand con revalidatePath("/").
+export const revalidate = false;
 
 export default async function Home() {
   const [municipiosSnap, iglesiasSnap] = await Promise.all([
@@ -52,8 +56,7 @@ export default async function Home() {
       className="min-h-screen w-full bg-white"
       style={{ backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)", backgroundSize: "22px 22px" }}
     >
-      {/* Mobile: título + stats arriba, mapa ocupa el resto, selector y botón abajo */}
-      <MobileHome
+      <ResponsiveHome
         totalMunicipios={totalMunicipios}
         totalIglesias={totalIglesias}
         totalHabitantes={"+3 M"}
@@ -61,20 +64,6 @@ export default async function Home() {
         iglesias={iglesias}
         municipiosOptions={municipiosParaSelect}
       />
-
-      {/* Desktop: tarjeta flotante sobre el mapa */}
-      <div className="hidden min-h-screen w-full items-center justify-center sm:flex">
-        <div className="w-11/12 max-w-7xl">
-          <DesktopHome
-            totalMunicipios={totalMunicipios}
-            totalIglesias={totalIglesias}
-            totalHabitantes={"+3 M"}
-            municipios={municipios}
-            iglesias={iglesias}
-            municipiosOptions={municipiosParaSelect}
-          />
-        </div>
-      </div>
     </div>
   );
 }

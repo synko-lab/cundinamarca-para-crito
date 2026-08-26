@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAdminSession } from "@/lib/admin-session";
@@ -66,6 +67,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const updatedDoc = await docRef.get();
     const data: any = updatedDoc.data();
 
+    revalidatePath("/");
+
     return NextResponse.json({
       success: true,
       item: {
@@ -101,6 +104,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     await docRef.delete();
+
+    revalidatePath("/");
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting municipio:", error);

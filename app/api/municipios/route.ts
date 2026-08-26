@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAdminSession } from "@/lib/admin-session";
@@ -94,6 +95,8 @@ export async function POST(request: NextRequest) {
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
+
+    revalidatePath("/");
 
     return NextResponse.json({ success: true, id: docRef.id }, { status: 201 });
   } catch (error) {
