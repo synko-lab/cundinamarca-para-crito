@@ -227,7 +227,6 @@ export default function CundinamarcaMap({
       maxZoom: MAX_ZOOM,
       scrollWheelZoom: false,
       zoomControl: false,
-      maxBoundsViscosity: 1.0,
     });
     mapRef.current = map;
 
@@ -240,8 +239,9 @@ export default function CundinamarcaMap({
     }).addTo(map);
 
     // Contorno del departamento: precalculado por
-    // scripts/fetch-cundinamarca-boundary.mjs. Oscurece todo lo que quede
-    // fuera de Cundinamarca y limita el paneo a esa zona.
+    // scripts/fetch-cundinamarca-boundary.mjs. Solo oscurece visualmente lo
+    // que queda fuera de Cundinamarca; el paneo se deja libre (sin
+    // setMaxBounds) para no bloquear el mapa.
     fetch("/data/cundinamarca-boundary.json")
       .then((res) => (res.ok ? res.json() : null))
       .then((geometry: GeoJSON.Geometry | null) => {
@@ -255,9 +255,6 @@ export default function CundinamarcaMap({
           fillOpacity: 0.55,
           interactive: false,
         }).addTo(mapRef.current);
-
-        const bounds = L.geoJSON(geometry as any).getBounds();
-        mapRef.current.setMaxBounds(bounds.pad(0.05));
       })
       .catch((err) => console.error("Error cargando contorno de Cundinamarca:", err));
 
